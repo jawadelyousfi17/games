@@ -208,6 +208,14 @@ body {
  * accent. Token names are kept ("navy", "brand-lime") to avoid churn across
  * the codebase, but their values now resolve to stone/green tones.
  * ------------------------------------------------------------------------- */
+/* Single-font policy: every Tailwind family token (sans, serif, mono) maps
+ * to Space Grotesk so the whole UI sticks to one typeface. */
+@theme {
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-sans);
+  --font-serif: var(--font-sans);
+}
+
 @theme {
   --color-navy-50: #f1f0eb;
   --color-navy-100: #d8d6cf;

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -8,12 +8,6 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-});
-
-const jetbrains = JetBrains_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -33,7 +27,7 @@ export default function RootLayout({
         content="xR2RCQK5U-mu3HPryouog6zYXHZTN53nbxRhlLwxEXg"
       />
       <body
-        className={`${spaceGrotesk.variable} ${jetbrains.variable} antialiased min-h-screen flex flex-col font-sans`}
+        className={`${spaceGrotesk.variable} antialiased min-h-screen flex flex-col font-sans`}
       >
         <ThemeProvider
           attribute="class"
