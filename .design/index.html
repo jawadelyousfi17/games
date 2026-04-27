@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>1337 · Games</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui'],
+          mono: ['"JetBrains Mono"', 'ui-monospace'],
+        },
+        colors: {
+          navy: {
+            50: '#eef0f7',
+            100: '#d8dcec',
+            200: '#a9b0d1',
+            300: '#7a83b3',
+            400: '#525c8e',
+            500: '#3a4373',
+            600: '#2a3158',
+            700: '#222845',
+            750: '#1c2139',
+            800: '#171b30',
+            850: '#13172a',
+            900: '#0f1226',
+            950: '#0a0d20',
+          },
+          lime: { DEFAULT: '#c6f24e', hover: '#b9e83a', deep: '#9bc92a' },
+          coral: { DEFAULT: '#ff6f91' },
+          sky: { DEFAULT: '#5ec6ff' },
+          amber: { DEFAULT: '#ffc857' },
+        },
+        boxShadow: {
+          'btn-lime': 'inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -2px 0 rgba(0,0,0,0.18), 0 8px 24px -6px rgba(198,242,78,0.55), 0 2px 0 rgba(0,0,0,0.2)',
+          'btn-lime-hover': 'inset 0 1px 0 rgba(255,255,255,0.65), inset 0 -2px 0 rgba(0,0,0,0.18), 0 14px 32px -6px rgba(198,242,78,0.7), 0 4px 0 rgba(0,0,0,0.2)',
+          'btn-lime-active': 'inset 0 2px 4px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.1)',
+          'card': '0 0 0 1px rgba(255,255,255,0.04), 0 30px 60px -30px rgba(0,0,0,0.6)',
+          'card-pop': '0 30px 80px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
+          'glow-lime': '0 0 60px -10px rgba(198,242,78,0.5)',
+        },
+      }
+    }
+  }
+</script>
+<style>
+  html, body { background: #0a0d20; }
+  body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  ::selection { background: #c6f24e; color: #0a0d20; }
+  @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+  .pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+  @keyframes float-y { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  .float-y { animation: float-y 4.5s ease-in-out infinite; }
+  @keyframes drift { 0%,100% { transform: translate(0,0) rotate(0deg); } 50% { transform: translate(6px,-4px) rotate(2deg); } }
+  .drift { animation: drift 6s ease-in-out infinite; }
+  @keyframes spin-slow { to { transform: rotate(360deg); } }
+  .spin-slow { animation: spin-slow 18s linear infinite; }
+  .grain { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"); }
+  /* checker board */
+  .chess-grid { background-image:
+    linear-gradient(45deg, #2a3158 25%, transparent 25%),
+    linear-gradient(-45deg, #2a3158 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a3158 75%),
+    linear-gradient(-45deg, transparent 75%, #2a3158 75%);
+    background-size: 32px 32px;
+    background-position: 0 0, 0 16px, 16px -16px, -16px 0;
+  }
+  .ring-soft { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { scrollbar-width: none; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body class="bg-navy-950 text-navy-50">
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

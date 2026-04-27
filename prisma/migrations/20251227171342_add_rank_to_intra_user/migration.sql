@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "IntraUser" ADD COLUMN     "rank" INTEGER NOT NULL DEFAULT 0;

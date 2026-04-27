@@ -1,0 +1,58 @@
+{
+  "nav": {
+    "games": "Games"
+  },
+  "hero": {
+    "season": "Season 03 · open",
+    "audience": "For 1337 students only",
+    "title1": "Play between",
+    "title2": "two",
+    "title3": "pushes.",
+    "subtitle": "A small, well-made games club for the 42 / 1337 network. Sign in with your intra and queue up.",
+    "oauthHint": "OAuth via api.intra.42.fr"
+  },
+  "intra": {
+    "signIn": "Sign in with intra"
+  },
+  "games": {
+    "title": "Games.",
+    "items": {
+      "chess": {
+        "name": "Chess",
+        "sub": "Classical · Blitz · Bullet",
+        "players": "23 in queue"
+      },
+      "uno": {
+        "name": "Uno",
+        "sub": "2–4 players · Standard rules",
+        "players": "11 playing"
+      },
+      "poker": {
+        "name": "Poker",
+        "sub": "Texas Hold'em · 6-max",
+        "players": "Coming Q2"
+      }
+    }
+  },
+  "cta": {
+    "eyebrow": "/ ready when you are",
+    "title1": "Bring your",
+    "title1Accent": "intra",
+    "title2": ".",
+    "title3": "Leave with a few wins."
+  },
+  "chess": {
+    "back": "Back",
+    "title": "Chess",
+    "heading": "Chess · pass-and-play",
+    "subheading": "Two players, one screen. Drag a piece. Rules enforced by chess.js."
+  },
+  "footer": {
+    "tagline": "Built by 1337 students.",
+    "links": {
+      "github": "GitHub",
+      "discord": "Discord",
+      "report": "Report a bug"
+    }
+  }
+}

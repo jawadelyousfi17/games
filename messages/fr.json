@@ -1,0 +1,58 @@
+{
+  "nav": {
+    "games": "Jeux"
+  },
+  "hero": {
+    "season": "Saison 03 · ouverte",
+    "audience": "Réservé aux étudiants 1337",
+    "title1": "Joue entre",
+    "title2": "deux",
+    "title3": "pushes.",
+    "subtitle": "Un petit club de jeux soigné pour le réseau 42 / 1337. Connecte-toi avec ton intra et lance-toi.",
+    "oauthHint": "OAuth via api.intra.42.fr"
+  },
+  "intra": {
+    "signIn": "Se connecter avec intra"
+  },
+  "games": {
+    "title": "Jeux.",
+    "items": {
+      "chess": {
+        "name": "Échecs",
+        "sub": "Classique · Blitz · Bullet",
+        "players": "23 en file"
+      },
+      "uno": {
+        "name": "Uno",
+        "sub": "2–4 joueurs · Règles standard",
+        "players": "11 en jeu"
+      },
+      "poker": {
+        "name": "Poker",
+        "sub": "Texas Hold'em · 6-max",
+        "players": "Bientôt T2"
+      }
+    }
+  },
+  "cta": {
+    "eyebrow": "/ prêt quand tu veux",
+    "title1": "Apporte ton",
+    "title1Accent": "intra",
+    "title2": ".",
+    "title3": "Repars avec quelques victoires."
+  },
+  "chess": {
+    "back": "Retour",
+    "title": "Échecs",
+    "heading": "Échecs · à tour de rôle",
+    "subheading": "Deux joueurs, un écran. Glisse une pièce. Règles vérifiées par chess.js."
+  },
+  "footer": {
+    "tagline": "Fait par les étudiants 1337.",
+    "links": {
+      "github": "GitHub",
+      "discord": "Discord",
+      "report": "Signaler un bug"
+    }
+  }
+}
