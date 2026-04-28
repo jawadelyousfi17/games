@@ -28,7 +28,7 @@ export function ChessClock({
 
   return (
     <div
-      className={`flex items-center justify-between rounded-xl px-4 py-3 font-mono ring-1 transition-all ${
+      className={`flex items-center justify-between rounded-xl px-4 py-3 ring-1 transition-all ${
         active
           ? lowTime
             ? "bg-brand-coral/15 text-white ring-brand-coral/50"

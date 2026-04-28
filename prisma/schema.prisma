@@ -36,6 +36,10 @@ model User {
   blackGames        ChessGame[]        @relation("BlackGames")
   chessQueueTicket  ChessQueueTicket?
   chessRating       ChessRating?
+  chessMessages     ChessChatMessage[]
+
+  challengesSent     ChessChallenge[] @relation("ChallengesSent")
+  challengesReceived ChessChallenge[] @relation("ChallengesReceived")
 }
 
 model Account {
@@ -125,6 +129,19 @@ enum ChessResult {
   DRAW
 }
 
+enum ChessEndReason {
+  CHECKMATE
+  RESIGN
+  TIMEOUT
+  STALEMATE
+  DRAW_INSUFFICIENT
+  DRAW_THREEFOLD
+  DRAW_FIFTY_MOVE
+  DRAW_AGREED
+  ABORT
+  DISCONNECT
+}
+
 model ChessGame {
   id           String          @id @default(cuid())
   whiteId      String
@@ -135,6 +152,7 @@ model ChessGame {
   pgn          String          @default("")
   status       ChessGameStatus @default(IN_PROGRESS)
   result       ChessResult?
+  endReason    ChessEndReason?
 
   // Time control + per-color clocks (server-authoritative, milliseconds).
   initialMs    Int             @default(300000)
@@ -146,6 +164,10 @@ model ChessGame {
   startedAt    DateTime        @default(now())
   endedAt      DateTime?
 
+  /** User id of whoever has an open draw offer; null when no offer pending.
+   *  Auto-cleared on any move and on accept/decline. */
+  drawOfferedBy String?
+
   // Snapshot of ratings at game start; "after" populated on finalize.
   whiteRatingBefore Int        @default(1200)
   blackRatingBefore Int        @default(1200)
@@ -153,6 +175,7 @@ model ChessGame {
   blackRatingAfter  Int?
 
   moves        ChessMove[]
+  messages     ChessChatMessage[]
 
   @@index([whiteId])
   @@index([blackId])
@@ -183,6 +206,44 @@ model ChessQueueTicket {
   createdAt   DateTime @default(now())
 
   @@index([createdAt])
+}
+
+enum ChessChallengeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELLED
+}
+
+model ChessChallenge {
+  id            String               @id @default(cuid())
+  challengerId  String
+  challengedId  String
+  initialMs     Int                  @default(300000)
+  incrementMs   Int                  @default(0)
+  status        ChessChallengeStatus @default(PENDING)
+  expiresAt     DateTime
+  createdAt     DateTime             @default(now())
+  resolvedAt    DateTime?
+  gameId        String?
+  challenger    User @relation("ChallengesSent", fields: [challengerId], references: [id], onDelete: Cascade)
+  challenged    User @relation("ChallengesReceived", fields: [challengedId], references: [id], onDelete: Cascade)
+
+  @@index([challengedId, status])
+  @@index([challengerId, status])
+}
+
+model ChessChatMessage {
+  id        String    @id @default(cuid())
+  gameId    String
+  userId    String
+  body      String    @db.VarChar(500)
+  createdAt DateTime  @default(now())
+  game      ChessGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameId, createdAt])
 }
 
 model ChessRating {

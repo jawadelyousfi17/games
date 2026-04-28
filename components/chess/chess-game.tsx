@@ -1,24 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Button } from "@/components/ui/button";
 import { RightRail } from "./right-rail";
+import { MobileGameBar } from "./mobile-game-bar";
 import { GameActionBar } from "./game-action-bar";
+import { BoardFrame } from "./board-frame";
+import { GameEndDialog } from "./game-end-dialog";
+import { useGameReview } from "./use-game-review";
 import { useChessTheme } from "./use-chess-theme";
 import { deriveCaptured } from "@/lib/chess/captured";
 import { CapturedRow } from "./captured-row";
+import type { ChessEndReasonValue } from "@/lib/chess/realtime";
+import { playGameEndSound } from "@/lib/chess/sound";
 
 const TURN_LABEL: Record<"w" | "b", string> = {
   w: "White to move",
   b: "Black to move",
 };
 
+/** Selection bound to the FEN at click time. Becomes inert when the position
+ *  changes (e.g. on undo/reset) without needing a setState-in-effect. */
+type Selection = { square: string; fen: string } | null;
+
 /**
- * Local pass-and-play board, same layout shell as the online game so the
- * style stays consistent. No clocks, no rating — just a Reset / Undo control
- * pair in place of the Resign action.
+ * Local pass-and-play board. Same layout shell as the online game (mobile
+ * bar, board, right rail) so the design stays consistent. After the game
+ * ends the user can walk through past positions via the move-nav.
  */
 export function ChessGame() {
   const [game, setGame] = useState(() => new Chess());
@@ -26,18 +36,84 @@ export function ChessGame() {
   const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(
     null,
   );
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
+  /** -1 = starting pos, 0..N-1 = after that ply, null = follow live state. */
+  const [viewingPly, setViewingPly] = useState<number | null>(null);
   const { theme } = useChessTheme();
 
-  const history = useMemo(() => game.history(), [game, fen]);
+  // chess.js mutates `game` in place; bumping `fen` is enough to invalidate
+  // memos that depend on the live position.
+  const history = useMemo(
+    () => game.history(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game, fen],
+  );
   const captured = useMemo(() => deriveCaptured(history), [history]);
-  const isOver =
-    game.isCheckmate() || game.isStalemate() || game.isDraw();
+  const review = useGameReview(history);
+  const isOver = game.isCheckmate() || game.isStalemate() || game.isDraw();
 
+  // Auto-jump into review mode when the game ends.
   useEffect(() => {
-    setSelected(null);
-  }, [fen]);
+    if (isOver && viewingPly === null && history.length > 0) {
+      setViewingPly(history.length - 1);
+    }
+  }, [isOver, viewingPly, history.length]);
+
+  // -------- Game-end dialog + sound --------
+  const [endDialogOpen, setEndDialogOpen] = useState(false);
+  const endTriggeredRef = useRef(false);
+  const endInfo = useMemo(
+    () => deriveLocalEnd(game),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game, fen],
+  );
+  useEffect(() => {
+    if (!isOver || endTriggeredRef.current) return;
+    endTriggeredRef.current = true;
+    setEndDialogOpen(true);
+    playGameEndSound(endInfo.outcome);
+  }, [isOver, endInfo.outcome]);
+
+  // Reset the end-dialog trigger when the user starts a fresh game.
+  useEffect(() => {
+    if (!isOver) endTriggeredRef.current = false;
+  }, [isOver]);
+
+  const isLiveView = viewingPly === null;
+  const currentPly = viewingPly ?? history.length - 1;
+
+  const seek = useCallback(
+    (ply: number) => {
+      const clamped = Math.max(-1, Math.min(history.length - 1, ply));
+      setViewingPly(
+        clamped === history.length - 1 && !isOver ? null : clamped,
+      );
+    },
+    [history.length, isOver],
+  );
+
+  // Prefer the authoritative live fen when at the last ply or live, so a
+  // rebuilt-from-history FEN can never visually rewind the board after a
+  // mating move.
+  const atLastPly = currentPly === history.length - 1;
+  const displayFen =
+    isLiveView || atLastPly
+      ? fen
+      : (review.positions.fens[currentPly + 1] ?? fen);
+  const displayLastMove =
+    isLiveView || atLastPly
+      ? lastMove
+      : currentPly >= 0
+        ? review.positions.moves[currentPly]
+        : null;
+  const displayChess = useMemo(
+    () => (isLiveView || atLastPly ? game : new Chess(displayFen)),
+    [isLiveView, atLastPly, game, displayFen],
+  );
+
+  const selected =
+    selection && selection.fen === fen ? selection.square : null;
 
   const executeMove = useCallback(
     (from: string, to: string): boolean => {
@@ -46,7 +122,7 @@ export function ChessGame() {
         if (!move) return false;
         setFen(game.fen());
         setLastMove({ from, to });
-        setSelected(null);
+        setSelection(null);
         return true;
       } catch {
         return false;
@@ -63,10 +139,10 @@ export function ChessGame() {
       sourceSquare: string;
       targetSquare: string | null;
     }) => {
-      if (!targetSquare || isOver) return false;
+      if (!targetSquare || isOver || !isLiveView) return false;
       return executeMove(sourceSquare, targetSquare);
     },
-    [isOver, executeMove],
+    [isOver, isLiveView, executeMove],
   );
 
   const onSquareClick = useCallback(
@@ -77,7 +153,7 @@ export function ChessGame() {
       square: string;
       piece: { pieceType: string } | null;
     }) => {
-      if (isOver) return;
+      if (isOver || !isLiveView) return;
       if (selected) {
         const legal: string[] = game
           .moves({ square: selected as Square, verbose: true })
@@ -88,12 +164,12 @@ export function ChessGame() {
         }
       }
       if (piece && piece.pieceType[0]?.toLowerCase() === game.turn()) {
-        setSelected(square);
+        setSelection({ square, fen });
         return;
       }
-      setSelected(null);
+      setSelection(null);
     },
-    [game, isOver, selected, executeMove],
+    [game, isOver, isLiveView, selected, executeMove, fen],
   );
 
   const reset = useCallback(() => {
@@ -101,7 +177,8 @@ export function ChessGame() {
     setGame(fresh);
     setFen(fresh.fen());
     setLastMove(null);
-    setSelected(null);
+    setSelection(null);
+    setViewingPly(null);
   }, []);
 
   const undo = useCallback(() => {
@@ -110,7 +187,7 @@ export function ChessGame() {
     const verbose = game.history({ verbose: true });
     const last = verbose[verbose.length - 1];
     setLastMove(last ? { from: last.from, to: last.to } : null);
-    setSelected(null);
+    setSelection(null);
   }, [game]);
 
   const onFlipBoard = useCallback(() => {
@@ -119,21 +196,21 @@ export function ChessGame() {
 
   const squareStyles = useMemo<Record<string, React.CSSProperties>>(() => {
     const out: Record<string, React.CSSProperties> = {};
-    if (lastMove) {
-      out[lastMove.from] = { background: theme.lastMove };
-      out[lastMove.to] = { background: theme.lastMove };
+    if (displayLastMove) {
+      out[displayLastMove.from] = { background: theme.lastMove };
+      out[displayLastMove.to] = { background: theme.lastMove };
     }
-    if (game.inCheck()) {
-      const kingSq = findKingSquare(game, game.turn());
+    if (displayChess.inCheck()) {
+      const kingSq = findKingSquare(displayChess, displayChess.turn());
       if (kingSq) out[kingSq] = { background: theme.check };
     }
-    if (selected) {
+    if (isLiveView && selected) {
       out[selected] = {
         ...(out[selected] ?? {}),
         background: theme.lastMove,
         boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.55)",
       };
-      const targets = game
+      const targets = displayChess
         .moves({ square: selected as Square, verbose: true })
         .map((m) => m.to);
       for (const t of targets) {
@@ -145,13 +222,21 @@ export function ChessGame() {
       }
     }
     return out;
-  }, [lastMove, theme.lastMove, theme.check, game, selected]);
+  }, [displayLastMove, theme.lastMove, theme.check, displayChess, selected, isLiveView]);
 
   const turnLabel = isOver ? "Game over" : TURN_LABEL[game.turn()];
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] gap-0">
-      <div className="flex min-w-0 flex-1 flex-col">
+    <div className="relative h-screen">
+      <div className="flex h-full flex-col p-6 xl:pr-[444px] 2xl:pr-[584px]">
+        <MobileGameBar
+          history={history}
+          banner={turnLabel}
+          onFlipBoard={onFlipBoard}
+          review={review}
+          currentPly={currentPly}
+          onSeek={seek}
+        />
         <SimplePlayerRow
           label={orientation === "white" ? "Black" : "White"}
           captured={
@@ -160,21 +245,23 @@ export function ChessGame() {
           active={!isOver && game.turn() === (orientation === "white" ? "b" : "w")}
         />
 
-        <div className="relative mx-auto aspect-square w-full max-w-[min(100%,calc(100vh-12rem))] overflow-hidden ring-1 ring-white/10 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.6)]">
-          <Chessboard
-            options={{
-              position: fen,
-              onPieceDrop,
-              onSquareClick,
-              allowDragging: !isOver,
-              animationDurationInMs: 200,
-              darkSquareStyle: { backgroundColor: theme.dark },
-              lightSquareStyle: { backgroundColor: theme.light },
-              squareStyles,
-              boardOrientation: orientation,
-              boardStyle: { borderRadius: 0 },
-            }}
-          />
+        <div className="flex min-h-0 flex-1 items-center justify-center py-2">
+          <BoardFrame>
+            <Chessboard
+              options={{
+                position: displayFen,
+                onPieceDrop,
+                onSquareClick,
+                allowDragging: !isOver && isLiveView,
+                animationDurationInMs: 200,
+                darkSquareStyle: { backgroundColor: theme.dark },
+                lightSquareStyle: { backgroundColor: theme.light },
+                squareStyles,
+                boardOrientation: orientation,
+                boardStyle: { borderRadius: 0 },
+              }}
+            />
+          </BoardFrame>
         </div>
 
         <SimplePlayerRow
@@ -203,13 +290,28 @@ export function ChessGame() {
         </div>
       </div>
 
-      <div className="hidden w-[380px] flex-shrink-0 border-l border-white/5 lg:flex">
+      <GameEndDialog
+        open={endDialogOpen}
+        onOpenChange={setEndDialogOpen}
+        outcome={endInfo.outcome}
+        reason={endInfo.reason}
+        title={endInfo.title}
+        qualities={review.qualities}
+        playerColor={endInfo.playerColor}
+        newGameHref="/games/chess/play/local"
+        newGameLabel="New game"
+      />
+
+      <aside className="fixed right-0 top-0 hidden h-screen border-l border-white/5 xl:flex xl:w-[420px] 2xl:w-[560px]">
         <RightRail
           history={history}
           banner={turnLabel}
           onFlipBoard={onFlipBoard}
+          review={review}
+          currentPly={currentPly}
+          onSeek={seek}
         />
-      </div>
+      </aside>
     </div>
   );
 }
@@ -227,9 +329,7 @@ function SimplePlayerRow({
     <div className="flex items-center gap-3 px-1 py-2">
       <div
         className={`flex h-8 w-8 items-center justify-center rounded-md text-[12px] font-bold ${
-          active
-            ? "bg-white text-navy-900"
-            : "bg-navy-700 text-white"
+          active ? "bg-white text-navy-900" : "bg-navy-700 text-white"
         }`}
       >
         {label[0]}
@@ -238,6 +338,40 @@ function SimplePlayerRow({
       <CapturedRow pieces={captured} />
     </div>
   );
+}
+
+/**
+ * Maps a chess.js terminal state to the GameEndDialog inputs. For local
+ * pass-and-play we don't have a "you" perspective, so winner-side titles
+ * read more naturally than "You won". `playerColor` resolves to the
+ * winner's color when there is one — it filters the stat row to that side.
+ */
+function deriveLocalEnd(game: Chess): {
+  outcome: "win" | "loss" | "draw";
+  reason: ChessEndReasonValue | null;
+  title: string;
+  playerColor: "w" | "b" | null;
+} {
+  if (game.isCheckmate()) {
+    // turn() returns the side that's mated; the other side is the winner.
+    const winnerColor: "w" | "b" = game.turn() === "w" ? "b" : "w";
+    const winnerLabel = winnerColor === "w" ? "White" : "Black";
+    return {
+      outcome: "win",
+      reason: "CHECKMATE",
+      title: `${winnerLabel} Won`,
+      playerColor: winnerColor,
+    };
+  }
+  if (game.isStalemate())
+    return { outcome: "draw", reason: "STALEMATE", title: "Draw", playerColor: null };
+  if (game.isInsufficientMaterial())
+    return { outcome: "draw", reason: "DRAW_INSUFFICIENT", title: "Draw", playerColor: null };
+  if (game.isThreefoldRepetition())
+    return { outcome: "draw", reason: "DRAW_THREEFOLD", title: "Draw", playerColor: null };
+  if (game.isDraw())
+    return { outcome: "draw", reason: "DRAW_FIFTY_MOVE", title: "Draw", playerColor: null };
+  return { outcome: "draw", reason: null, title: "Game over", playerColor: null };
 }
 
 function findKingSquare(game: Chess, color: "w" | "b"): string | null {

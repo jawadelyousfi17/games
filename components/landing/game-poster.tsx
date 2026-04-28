@@ -39,7 +39,7 @@ export function GamePoster({
           </h3>
           <div className="mt-0.5 text-[12px] text-white/60">{sub}</div>
         </div>
-        <div className="font-mono text-[11px] text-white/60">{players}</div>
+        <div className="text-[11px] text-white/60">{players}</div>
       </div>
     </Link>
   );

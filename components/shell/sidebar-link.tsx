@@ -7,26 +7,38 @@ import type { ReactElement } from "react";
 type SidebarLinkProps = {
   href: string;
   label: string;
-  /** Pre-rendered icon element. Server-rendered so this client component
-   *  doesn't need a function-component prop crossing the boundary. */
   icon: ReactElement;
-  /** Disabled items render as muted text without a link target. */
   disabled?: boolean;
+  /** "responsive" hides the label until parent group is hovered, "full"
+   *  always shows it. */
+  mode?: "responsive" | "full";
 };
 
 /**
- * Single nav entry. Matches the chess.com pattern: flat by default, raised
- * with an inset bottom shadow on hover/active to give the sidebar a touch of
- * depth.
+ * Single nav entry. In responsive mode the label collapses by default and
+ * appears when the user hovers the sidebar — relies on the parent carrying
+ * the `group` Tailwind class. The mobile Sheet always uses `full` mode.
  */
 export function SidebarLink({
   href,
   label,
   icon,
   disabled,
+  mode = "responsive",
 }: SidebarLinkProps) {
   const pathname = usePathname();
-  const active = !disabled && href !== "#" && pathname.startsWith(href);
+  // Exact match OR pathname extends `href` past a "/" boundary, so a more
+  // specific link like `/games/chess/leaderboard` doesn't also light up the
+  // less-specific `/games/chess` entry.
+  const active =
+    !disabled &&
+    href !== "#" &&
+    (pathname === href || pathname.startsWith(`${href}/`));
+
+  const labelClass =
+    mode === "responsive"
+      ? "hidden group-hover:inline whitespace-nowrap"
+      : "inline whitespace-nowrap";
 
   const className = `flex h-12 items-center gap-3 rounded-md px-3.5 text-[14px] font-semibold transition-all ${
     disabled
@@ -38,17 +50,17 @@ export function SidebarLink({
 
   if (disabled) {
     return (
-      <span className={className} aria-disabled>
+      <span className={className} aria-disabled title={label}>
         {icon}
-        {label}
+        <span className={labelClass}>{label}</span>
       </span>
     );
   }
 
   return (
-    <Link href={href} className={className}>
+    <Link href={href} className={className} title={label}>
       {icon}
-      {label}
+      <span className={labelClass}>{label}</span>
     </Link>
   );
 }

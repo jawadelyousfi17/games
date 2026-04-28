@@ -24,10 +24,12 @@ export function toGameStatePayload(game: GameWithMoves): GameStatePayload {
     fen: game.fen,
     status: game.status,
     result: game.result,
+    endReason: game.endReason,
     whiteMs: game.whiteMs,
     blackMs: game.blackMs,
     lastMoveAt: game.lastMoveAt.toISOString(),
     history: orderedMoves.map((m) => m.san),
     lastMove,
+    drawOfferedBy: game.drawOfferedBy,
   };
 }

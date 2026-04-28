@@ -42,7 +42,7 @@ export default async function ChessLobbyPage() {
             <h1 className="text-[28px] font-extrabold tracking-tight text-white">
               Play Chess
             </h1>
-            <span className="font-mono text-[12px] text-navy-300">
+            <span className="text-[12px] text-navy-300">
               Blitz · Elo-ranked
             </span>
           </div>
@@ -52,7 +52,7 @@ export default async function ChessLobbyPage() {
           </div>
 
           <section className="mx-auto w-full max-w-[640px]">
-            <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wider text-navy-400">
+            <h2 className="mb-3 text-[11px] uppercase tracking-wider text-navy-400">
               Recent
             </h2>
             {recent.length === 0 ? (
@@ -78,13 +78,13 @@ export default async function ChessLobbyPage() {
                         href={`/games/chess/play/${g.id}`}
                         className="flex items-center gap-4 rounded-md bg-navy-900 px-4 py-2.5 ring-1 ring-white/5 hover:bg-navy-800"
                       >
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-navy-400">
+                        <span className="text-[10px] uppercase tracking-wider text-navy-400">
                           {youAreWhite ? "white" : "black"}
                         </span>
                         <span className="flex-1 truncate text-[13px] text-white">
                           vs {opponent.login}
                         </span>
-                        <span className="font-mono text-[12px] text-navy-300">
+                        <span className="text-[12px] text-navy-300">
                           {g.status === "IN_PROGRESS"
                             ? "in progress"
                             : g.result
@@ -93,7 +93,7 @@ export default async function ChessLobbyPage() {
                         </span>
                         {ratingDelta !== null && (
                           <span
-                            className={`font-mono text-[12px] ${
+                            className={`text-[12px] ${
                               ratingDelta > 0
                                 ? "text-brand-lime"
                                 : ratingDelta < 0

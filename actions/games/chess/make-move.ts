@@ -1,9 +1,11 @@
 "use server";
 
 import { Chess } from "chess.js";
-import type { ChessResult } from "@/lib/generated/prisma";
+import type { ChessResult, ChessEndReason } from "@/lib/generated/prisma";
 import { auth } from "@/lib/auth/auth-provider";
 import { prisma } from "@/lib/prisma/prisma";
+import { emitGameState } from "@/lib/chess/socket-bus";
+import { toGameStatePayload } from "@/lib/chess/game-state";
 import { finalizeChessGame } from "./finalize";
 
 type MakeMoveInput = {
@@ -17,10 +19,8 @@ type MakeMoveInput = {
 /**
  * Server-authoritative move handler. Validates against chess.js using the
  * stored FEN, persists the move, deducts elapsed clock time from the moving
- * color, finalizes if the move ended the game, and broadcasts new state.
- *
- * Returns a boolean so the client can short-circuit illegal moves without
- * waiting for the realtime echo (the broadcast is the source of truth).
+ * color, finalizes if the move ended the game, then broadcasts the resulting
+ * state for any subscribed clients.
  */
 export async function makeChessMove(
   input: MakeMoveInput,
@@ -54,8 +54,6 @@ export async function makeChessMove(
       });
       if (!move) throw new Error("illegal_move");
 
-      // Server-side clock deduction. Elapsed time since lastMoveAt comes off
-      // the moving player's bank; increment is added back after the move.
       const now = new Date();
       const elapsed = Math.max(
         0,
@@ -81,6 +79,8 @@ export async function makeChessMove(
         fen: chess.fen(),
         pgn: chess.pgn(),
         lastMoveAt: now,
+        // Any move implicitly declines a pending draw offer.
+        drawOfferedBy: null,
         ...(myColor === "w"
           ? { whiteMs: remaining }
           : { blackMs: remaining }),
@@ -92,19 +92,26 @@ export async function makeChessMove(
       });
 
       let terminal: ChessResult | null = null;
+      let reason: ChessEndReason | null = null;
       if (chess.isCheckmate()) {
         terminal = myColor === "w" ? "WHITE_WIN" : "BLACK_WIN";
-      } else if (
-        chess.isStalemate() ||
-        chess.isInsufficientMaterial() ||
-        chess.isThreefoldRepetition() ||
-        chess.isDraw()
-      ) {
+        reason = "CHECKMATE";
+      } else if (chess.isStalemate()) {
         terminal = "DRAW";
+        reason = "STALEMATE";
+      } else if (chess.isInsufficientMaterial()) {
+        terminal = "DRAW";
+        reason = "DRAW_INSUFFICIENT";
+      } else if (chess.isThreefoldRepetition()) {
+        terminal = "DRAW";
+        reason = "DRAW_THREEFOLD";
+      } else if (chess.isDraw()) {
+        terminal = "DRAW";
+        reason = "DRAW_FIFTY_MOVE";
       }
 
-      if (terminal) {
-        await finalizeChessGame(tx, game.id, terminal);
+      if (terminal && reason) {
+        await finalizeChessGame(tx, game.id, terminal, reason);
         didFinalize = true;
       }
     });
@@ -113,5 +120,18 @@ export async function makeChessMove(
     return { ok: false, reason };
   }
 
+  // Fan out the post-commit state to subscribers. Done outside the
+  // transaction so the emit doesn't block the move ack. In-process emit
+  // via Socket.IO — no network round-trip to a broker.
+  await broadcastFreshState(input.gameId);
   return { ok: true, reason: didFinalize ? "finalized" : undefined };
+}
+
+async function broadcastFreshState(gameId: string): Promise<void> {
+  const fresh = await prisma.chessGame.findUnique({
+    where: { id: gameId },
+    include: { moves: { select: { san: true, ply: true, uci: true } } },
+  });
+  if (!fresh) return;
+  emitGameState(gameId, toGameStatePayload(fresh));
 }

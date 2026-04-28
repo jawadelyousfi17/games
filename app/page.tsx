@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Shell } from "@/components/shell/shell";
 import { LobbyBoardPreview } from "@/components/chess/lobby-board-preview";
+import { auth } from "@/lib/auth/auth-provider";
 
 const GAMES = [
   {
@@ -11,33 +12,19 @@ const GAMES = [
     glyph: "♞",
     available: true,
   },
-  {
-    href: "#",
-    name: "Uno",
-    sub: "2–4 players · Standard rules",
-    accent: "bg-[#c45c5c]",
-    glyph: "U",
-    available: false,
-  },
-  {
-    href: "#",
-    name: "Poker",
-    sub: "Texas Hold'em · 6-max",
-    accent: "bg-[#7a4a26]",
-    glyph: "♠",
-    available: false,
-  },
 ];
 
 /** Public landing page. Sits inside the chess.com-style shell. */
-export default function Page() {
+export default async function Page() {
+  const session = await auth();
+  const isLoggedIn = !!session?.user?.id;
   return (
     <Shell>
       <div className="min-h-screen p-8">
         <div className="mx-auto max-w-[1100px]">
           <div className="grid items-center gap-10 md:grid-cols-[1.1fr_1fr]">
             <div>
-              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-navy-300">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-navy-300">
                 For 1337 students
               </div>
               <h1 className="mt-3 text-[clamp(40px,5vw,64px)] font-extrabold leading-[0.95] tracking-[-0.02em] text-white">
@@ -52,16 +39,18 @@ export default function Page() {
               <div className="mt-7 flex items-center gap-3">
                 <Link
                   href="/games/chess"
-                  className="inline-flex h-12 items-center justify-center rounded-md bg-brand-lime px-6 text-[14px] font-bold text-navy-950 shadow-[inset_0_-3px_0_rgba(0,0,0,0.22)] transition hover:bg-brand-lime-light active:translate-y-px active:shadow-[inset_0_-1px_0_rgba(0,0,0,0.18)]"
+                  className="btn-3d-lime inline-flex h-12 items-center justify-center rounded-md px-6 text-[14px] font-bold text-navy-950"
                 >
                   Play Chess
                 </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex h-12 items-center justify-center rounded-md bg-navy-800 px-6 text-[14px] font-medium text-white ring-1 ring-white/10 shadow-[inset_0_-2px_0_rgba(0,0,0,0.22)] transition hover:bg-navy-700 active:translate-y-px active:shadow-[inset_0_-1px_0_rgba(0,0,0,0.18)]"
-                >
-                  Sign in with intra
-                </Link>
+                {!isLoggedIn && (
+                  <Link
+                    href="/login"
+                    className="btn-3d-dark inline-flex h-12 items-center justify-center rounded-md px-6 text-[14px] font-semibold text-white ring-1 ring-white/10"
+                  >
+                    Sign in with intra
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -71,7 +60,7 @@ export default function Page() {
           </div>
 
           <section className="mt-16">
-            <h2 className="mb-4 font-mono text-[11px] uppercase tracking-wider text-navy-400">
+            <h2 className="mb-4 text-[11px] uppercase tracking-wider text-navy-400">
               Games
             </h2>
             <div className="grid gap-3 md:grid-cols-3">
@@ -98,7 +87,7 @@ export default function Page() {
                       </div>
                     </div>
                     <span
-                      className={`font-mono text-[10px] uppercase tracking-wider ${
+                      className={`text-[10px] uppercase tracking-wider ${
                         g.available ? "text-brand-lime" : "text-navy-400"
                       }`}
                     >

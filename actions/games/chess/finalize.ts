@@ -1,4 +1,4 @@
-import type { Prisma, ChessResult } from "@/lib/generated/prisma";
+import type { Prisma, ChessResult, ChessEndReason } from "@/lib/generated/prisma";
 import { applyElo, type WhiteScore } from "@/lib/chess/elo";
 
 type Tx = Prisma.TransactionClient;
@@ -10,14 +10,15 @@ const SCORE_FOR: Record<ChessResult, WhiteScore> = {
 };
 
 /**
- * Finalizes a chess game inside an open transaction: marks it COMPLETED,
- * applies Elo updates, and bumps win/loss/draw counters. Pure DB writes; the
- * caller is responsible for broadcasting the resulting state.
+ * Finalizes a chess game inside an open transaction: marks it COMPLETED with
+ * the given end reason, applies Elo updates, and bumps win/loss/draw
+ * counters. Pure DB writes; the caller broadcasts the resulting state.
  */
 export async function finalizeChessGame(
   tx: Tx,
   gameId: string,
   result: ChessResult,
+  reason: ChessEndReason,
 ): Promise<void> {
   const game = await tx.chessGame.findUniqueOrThrow({ where: { id: gameId } });
   const score = SCORE_FOR[result];
@@ -33,6 +34,7 @@ export async function finalizeChessGame(
     data: {
       status: "COMPLETED",
       result,
+      endReason: reason,
       endedAt: new Date(),
       whiteRatingAfter: next.white,
       blackRatingAfter: next.black,

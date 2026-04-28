@@ -54,10 +54,10 @@ export function MatchHeader({
         />
 
         <div className="flex flex-col items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-navy-300">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-navy-300">
             VS
           </span>
-          <span className="rounded-full bg-white/[0.04] px-3 py-1 font-mono text-[11px] text-navy-200 ring-1 ring-white/5">
+          <span className="rounded-full bg-white/[0.04] px-3 py-1 text-[11px] text-navy-200 ring-1 ring-white/5">
             {timeControl}
           </span>
         </div>
@@ -82,7 +82,7 @@ export function MatchHeader({
           style={{ width: `${blackProb * 100}%` }}
         />
       </div>
-      <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-navy-400">
+      <div className="mt-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-navy-400">
         <span>{Math.round(whiteProb * 100)}%</span>
         <span>win prob</span>
         <span>{Math.round(blackProb * 100)}%</span>
@@ -138,11 +138,11 @@ function PlayerSlot({
 
       <div className={align === "right" ? "items-end" : ""}>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-navy-400">
+          <span className="text-[10px] uppercase tracking-wider text-navy-400">
             {colorTag}
           </span>
           {isMe && (
-            <span className="rounded-full bg-brand-lime/20 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-brand-lime">
+            <span className="rounded-full bg-brand-lime/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-brand-lime">
               you
             </span>
           )}
@@ -150,7 +150,7 @@ function PlayerSlot({
         <div className="mt-0.5 truncate text-[16px] font-bold text-white">
           {player.login}
         </div>
-        <div className="font-mono text-[12px] text-navy-300">
+        <div className="text-[12px] text-navy-300">
           {player.rating}
         </div>
       </div>

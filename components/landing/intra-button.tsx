@@ -30,7 +30,7 @@ export function IntraButton({
       className="group inline-flex"
     >
       <Link href={href}>
-        <span className="relative inline-flex h-7 w-7 items-center justify-center rounded-lg bg-navy-950/85 font-mono text-[11px] font-bold text-brand-lime">
+        <span className="relative inline-flex h-7 w-7 items-center justify-center rounded-lg bg-navy-950/85 text-[11px] font-bold text-brand-lime">
           42
         </span>
         <span>{label ?? t("intra.signIn")}</span>

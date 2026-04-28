@@ -5,9 +5,7 @@ import { Shell } from "@/components/shell/shell";
 export default function LocalChessPage() {
   return (
     <Shell>
-      <div className="p-4">
-        <ChessGame />
-      </div>
+      <ChessGame />
     </Shell>
   );
 }

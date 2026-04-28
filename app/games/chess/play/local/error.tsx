@@ -15,7 +15,7 @@ export default function LocalChessError({ error, reset }: ErrorProps) {
         <h1 className="text-[24px] font-extrabold text-white">
           The local chess board crashed.
         </h1>
-        <p className="font-mono text-[12px] text-navy-300">
+        <p className="text-[12px] text-navy-300">
           {error.message || "Unknown error"}
         </p>
         <Button type="button" onClick={reset}>

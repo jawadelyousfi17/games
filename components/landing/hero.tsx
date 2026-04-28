@@ -10,7 +10,7 @@ export function Hero() {
   return (
     <section className="relative">
       <div className="mx-auto max-w-[1100px] px-6 pb-20 pt-16">
-        <div className="mb-8 flex items-center gap-3 font-mono text-[12px] text-navy-300">
+        <div className="mb-8 flex items-center gap-3 text-[12px] text-navy-300">
           <span className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 ring-1 ring-white/10">
             <span className="pulse-soft h-1.5 w-1.5 rounded-full bg-brand-lime" />
             {t("hero.season")}
@@ -34,7 +34,7 @@ export function Hero() {
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
               <IntraButton />
-              <span className="font-mono text-[12px] text-navy-400">
+              <span className="text-[12px] text-navy-400">
                 {t("hero.oauthHint")}
               </span>
             </div>

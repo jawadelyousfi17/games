@@ -13,7 +13,7 @@ const COLOR_LABEL: Record<"w" | "b", string> = {
 export function ChessStatusBadge({ status }: ChessStatusProps) {
   const { text, accent } = describe(status);
   return (
-    <div className="inline-flex h-8 items-center gap-2 rounded-full bg-white/[0.03] px-3 font-mono text-[12px] text-white ring-1 ring-white/10">
+    <div className="inline-flex h-8 items-center gap-2 rounded-full bg-white/[0.03] px-3 text-[12px] text-white ring-1 ring-white/10">
       <span
         className="h-1.5 w-1.5 rounded-full"
         style={{ background: accent }}

@@ -24,7 +24,7 @@ export function ThemePicker({ themes, active, onSelect }: ThemePickerProps) {
         <button
           type="button"
           aria-label="Board theme"
-          className="inline-flex h-8 items-center gap-2 rounded-full bg-white/[0.03] px-3 font-mono text-[12px] text-navy-200 ring-1 ring-white/10 transition hover:text-white"
+          className="inline-flex h-8 items-center gap-2 rounded-full bg-white/[0.03] px-3 text-[12px] text-navy-200 ring-1 ring-white/10 transition hover:text-white"
         >
           <Swatch theme={active} size={14} />
           {active.name}
@@ -51,7 +51,7 @@ export function ThemePicker({ themes, active, onSelect }: ThemePickerProps) {
                 <Swatch theme={t} size={20} />
                 <span className="flex-1">{t.name}</span>
                 {isActive && (
-                  <span className="font-mono text-[10px] text-brand-lime">
+                  <span className="text-[10px] text-brand-lime">
                     active
                   </span>
                 )}

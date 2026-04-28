@@ -21,9 +21,7 @@ export default async function ChessGamePage({ params }: ChessGamePageProps) {
 
   return (
     <Shell>
-      <div className="p-4">
-        <ChessGameOnline snapshot={snapshot} />
-      </div>
+      <ChessGameOnline snapshot={snapshot} />
     </Shell>
   );
 }

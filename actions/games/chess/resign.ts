@@ -2,11 +2,13 @@
 
 import { auth } from "@/lib/auth/auth-provider";
 import { prisma } from "@/lib/prisma/prisma";
+import { emitGameState } from "@/lib/chess/socket-bus";
+import { toGameStatePayload } from "@/lib/chess/game-state";
 import { finalizeChessGame } from "./finalize";
 
 /**
- * Forfeits the current game. Awards the win to the opponent and updates Elo.
- * The opponent will pick up the new state on their next poll.
+ * Forfeits the current game. Awards the win to the opponent and updates Elo,
+ * then fans out the new state to subscribers.
  */
 export async function resignChessGame(gameId: string): Promise<void> {
   const session = await auth();
@@ -26,6 +28,13 @@ export async function resignChessGame(gameId: string): Promise<void> {
       tx,
       gameId,
       myColor === "w" ? "BLACK_WIN" : "WHITE_WIN",
+      "RESIGN",
     );
   });
+
+  const fresh = await prisma.chessGame.findUnique({
+    where: { id: gameId },
+    include: { moves: { select: { san: true, ply: true, uci: true } } },
+  });
+  if (fresh) emitGameState(gameId, toGameStatePayload(fresh));
 }

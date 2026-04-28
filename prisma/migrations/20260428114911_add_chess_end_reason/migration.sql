@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "ChessEndReason" AS ENUM ('CHECKMATE', 'RESIGN', 'TIMEOUT', 'STALEMATE', 'DRAW_INSUFFICIENT', 'DRAW_THREEFOLD', 'DRAW_FIFTY_MOVE', 'DRAW_AGREED', 'ABORT');
+
+-- AlterTable
+ALTER TABLE "ChessGame" ADD COLUMN     "endReason" "ChessEndReason";

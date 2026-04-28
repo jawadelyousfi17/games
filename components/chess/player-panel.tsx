@@ -47,9 +47,9 @@ export function PlayerPanel({
           <span className="truncate text-[14px] font-semibold text-white">
             {login}
           </span>
-          <span className="font-mono text-[11px] text-navy-300">{rating}</span>
+          <span className="text-[11px] text-navy-300">{rating}</span>
           {badge && (
-            <span className="rounded-full bg-brand-lime/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-brand-lime">
+            <span className="rounded-full bg-brand-lime/15 px-2 py-0.5 text-[10px] uppercase tracking-wider text-brand-lime">
               {badge}
             </span>
           )}

@@ -6,19 +6,23 @@ import { Spinner } from "@/components/ui/spinner";
 import { enqueueChess } from "@/actions/games/chess/enqueue";
 import { leaveChessQueue } from "@/actions/games/chess/leave-queue";
 import { getMyChessMatch } from "@/actions/games/chess/get-my-match";
+import type { TimeControlId } from "@/lib/chess/time-controls";
 
 type QueueState = "idle" | "queueing" | "queued" | "matched";
 
 const POLL_INTERVAL_MS = 2000;
 
+type QueueButtonProps = {
+  /** Which time-control bucket to enqueue into. */
+  timeControlId: TimeControlId;
+};
+
 /**
  * Primary green "Start Game" CTA. Two states: idle → click to enqueue;
- * queued → polling for an opponent with a cancel option.
- *
- * Polling is the simplest viable matchmaking transport — sub-second pickup
- * would require a presence channel which isn't load-bearing for v1.
+ * queued → polling for an opponent with a cancel option. Pairs only with
+ * opponents in the same time-control queue.
  */
-export function QueueButton() {
+export function QueueButton({ timeControlId }: QueueButtonProps) {
   const router = useRouter();
   const [state, setState] = useState<QueueState>("idle");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,7 +51,7 @@ export function QueueButton() {
   const onFind = async () => {
     setState("queueing");
     try {
-      const result = await enqueueChess();
+      const result = await enqueueChess(timeControlId);
       if (result.kind === "matched" || result.kind === "alreadyInGame") {
         setState("matched");
         router.push(`/games/chess/play/${result.gameId}`);
@@ -72,7 +76,7 @@ export function QueueButton() {
         <button
           type="button"
           disabled
-          className="flex h-16 w-full items-center justify-center gap-2 rounded-md bg-brand-lime/40 text-[17px] font-bold text-navy-950"
+          className="btn-3d-lime flex h-16 w-full items-center justify-center gap-2 rounded-md text-[17px] font-bold text-navy-950"
         >
           <Spinner className="h-5 w-5" />
           Searching…
@@ -80,7 +84,7 @@ export function QueueButton() {
         <button
           type="button"
           onClick={onCancel}
-          className="flex h-11 w-full items-center justify-center rounded-md bg-navy-800 text-[14px] font-semibold text-white ring-1 ring-white/10 shadow-[inset_0_-2px_0_rgba(0,0,0,0.22)] transition hover:bg-navy-700 active:translate-y-px active:shadow-[inset_0_-1px_0_rgba(0,0,0,0.18)]"
+          className="btn-3d-dark flex h-11 w-full items-center justify-center rounded-md text-[14px] font-semibold text-white ring-1 ring-white/10"
         >
           Cancel
         </button>
@@ -92,7 +96,7 @@ export function QueueButton() {
     <button
       type="button"
       onClick={onFind}
-      className="flex h-16 w-full items-center justify-center rounded-md bg-brand-lime text-[17px] font-bold text-navy-950 shadow-[inset_0_-3px_0_rgba(0,0,0,0.22)] transition hover:bg-brand-lime-light active:translate-y-px active:shadow-[inset_0_-1px_0_rgba(0,0,0,0.18)]"
+      className="btn-3d-lime flex h-16 w-full items-center justify-center rounded-md text-[17px] font-bold text-navy-950"
     >
       Start Game
     </button>

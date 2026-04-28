@@ -37,12 +37,12 @@ export function ResultBanner({
       className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-navy-850 px-5 py-4 ring-1 ${ring}`}
     >
       <div>
-        <div className={`font-mono text-[11px] uppercase tracking-wider ${accent}`}>
+        <div className={`text-[11px] uppercase tracking-wider ${accent}`}>
           Result
         </div>
         <div className="mt-0.5 text-[18px] font-bold text-white">{title}</div>
         {subtitle && (
-          <div className="font-mono text-[12px] text-navy-300">{subtitle}</div>
+          <div className="text-[12px] text-navy-300">{subtitle}</div>
         )}
       </div>
       <Button asChild>
