@@ -16,6 +16,8 @@ import { useStockfish } from "./use-stockfish";
 import { CapturedRow } from "./captured-row";
 import { deriveCaptured } from "@/lib/chess/captured";
 import { resolveCastlingTarget } from "@/lib/chess/castle";
+import { isPromotionMove, type PromotionPiece } from "@/lib/chess/promotion";
+import { PromotionPicker } from "./promotion-picker";
 import { BOT_LEVELS, resolveBotLevel, type BotLevelId } from "@/lib/chess/bot-levels";
 import { saveBotReview } from "@/lib/chess/bot-review-storage";
 import type { ChessEndReasonValue, GameStatePayload } from "@/lib/chess/realtime";
@@ -57,6 +59,11 @@ export function ChessGameBot({
   );
   const [selection, setSelection] = useState<Selection>(null);
   const [viewingPly, setViewingPly] = useState<number | null>(null);
+  const [promotion, setPromotion] = useState<{
+    from: string;
+    to: string;
+    color: "w" | "b";
+  } | null>(null);
   /** Set when the human resigns. Forces an immediate end-state with a
    *  RESIGN reason so the user can jump straight to the review. */
   const [resigned, setResigned] = useState(false);
@@ -246,11 +253,10 @@ export function ChessGameBot({
   const canHumanMove =
     !isOver && !botThinking && isLiveView && game.turn() === humanColor;
 
-  const executeMove = useCallback(
-    (from: string, rawTo: string): boolean => {
+  const commitMove = useCallback(
+    (from: string, to: string, promotionPiece: PromotionPiece): boolean => {
       try {
-        const to = resolveCastlingTarget(game, from, rawTo);
-        const move = game.move({ from, to, promotion: "q" });
+        const move = game.move({ from, to, promotion: promotionPiece });
         if (!move) return false;
         setFen(game.fen());
         setLastMove({ from: move.from, to: move.to });
@@ -261,6 +267,18 @@ export function ChessGameBot({
       }
     },
     [game],
+  );
+
+  const executeMove = useCallback(
+    (from: string, rawTo: string): boolean => {
+      const to = resolveCastlingTarget(game, from, rawTo);
+      if (isPromotionMove(game, from, to)) {
+        setPromotion({ from, to, color: game.turn() });
+        return true;
+      }
+      return commitMove(from, to, "q");
+    },
+    [game, commitMove],
   );
 
   const onPieceDrop = useCallback(
@@ -437,6 +455,17 @@ export function ChessGameBot({
 
         <GameActionBar />
       </div>
+
+      <PromotionPicker
+        open={promotion !== null}
+        color={promotion?.color ?? "w"}
+        onPick={(piece) => {
+          if (!promotion) return;
+          commitMove(promotion.from, promotion.to, piece);
+          setPromotion(null);
+        }}
+        onCancel={() => setPromotion(null)}
+      />
 
       <GameEndDialog
         open={endDialogOpen}

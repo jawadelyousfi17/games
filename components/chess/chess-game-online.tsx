@@ -27,6 +27,8 @@ import {
 import { useChessTheme } from "./use-chess-theme";
 import { deriveCaptured } from "@/lib/chess/captured";
 import { resolveCastlingTarget } from "@/lib/chess/castle";
+import { isPromotionMove, type PromotionPiece } from "@/lib/chess/promotion";
+import { PromotionPicker } from "./promotion-picker";
 import { makeChessMove } from "@/actions/games/chess/make-move";
 import { resignChessGame } from "@/actions/games/chess/resign";
 import { claimChessTimeout } from "@/actions/games/chess/claim-timeout";
@@ -56,6 +58,11 @@ type Selection = { square: string; fen: string } | null;
 export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
   const [state, setState] = useState<GameStatePayload>(snapshot.state);
   const [selection, setSelection] = useState<Selection>(null);
+  const [promotion, setPromotion] = useState<{
+    from: string;
+    to: string;
+    color: "w" | "b";
+  } | null>(null);
   const [orientationOverride, setOrientationOverride] = useState<
     "white" | "black" | null
   >(null);
@@ -289,11 +296,10 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
   );
 
   // -------- Move execution --------
-  const executeMove = useCallback(
-    (from: string, rawTo: string): boolean => {
+  const commitMove = useCallback(
+    (from: string, to: string, promotionPiece: PromotionPiece): boolean => {
       const trial = new Chess(state.fen);
-      const to = resolveCastlingTarget(trial, from, rawTo);
-      const move = trial.move({ from, to, promotion: "q" });
+      const move = trial.move({ from, to, promotion: promotionPiece });
       if (!move) return false;
 
       // Detect terminal locally so the end-of-game dialog fires the instant
@@ -315,7 +321,7 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
         gameId: snapshot.id,
         from,
         to,
-        promotion: "q",
+        promotion: promotionPiece,
       }).then(async () => {
         try {
           const fresh = await getChessGame(snapshot.id);
@@ -326,7 +332,22 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
       });
       return true;
     },
-    [state.fen, snapshot.id],
+    [state.fen, snapshot.id, myColor],
+  );
+
+  const executeMove = useCallback(
+    (from: string, rawTo: string): boolean => {
+      const trial = new Chess(state.fen);
+      const to = resolveCastlingTarget(trial, from, rawTo);
+      // Defer promotion until the picker resolves. trial.turn() at this
+      // point is the moving side (the user).
+      if (isPromotionMove(trial, from, to)) {
+        setPromotion({ from, to, color: trial.turn() });
+        return true;
+      }
+      return commitMove(from, to, "q");
+    },
+    [state.fen, commitMove],
   );
 
   const onPieceDrop = useCallback(
@@ -636,6 +657,17 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
           </div>
         )}
       </div>
+
+      <PromotionPicker
+        open={promotion !== null}
+        color={promotion?.color ?? "w"}
+        onPick={(piece) => {
+          if (!promotion) return;
+          commitMove(promotion.from, promotion.to, piece);
+          setPromotion(null);
+        }}
+        onCancel={() => setPromotion(null)}
+      />
 
       <GameEndDialog
         open={endDialogOpen}

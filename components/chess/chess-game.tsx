@@ -14,6 +14,8 @@ import { useChessTheme } from "./use-chess-theme";
 import { CapturedRow } from "./captured-row";
 import { deriveCaptured } from "@/lib/chess/captured";
 import { resolveCastlingTarget } from "@/lib/chess/castle";
+import { isPromotionMove, type PromotionPiece } from "@/lib/chess/promotion";
+import { PromotionPicker } from "./promotion-picker";
 import type { ChessEndReasonValue } from "@/lib/chess/realtime";
 import {
   playGameEndSound,
@@ -44,6 +46,14 @@ export function ChessGame() {
   );
   const [selection, setSelection] = useState<Selection>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
+  /** Pending pawn promotion — set when the user pushes a pawn to the last
+   *  rank but hasn't picked a piece yet. The move is committed only after
+   *  the picker resolves. */
+  const [promotion, setPromotion] = useState<{
+    from: string;
+    to: string;
+    color: "w" | "b";
+  } | null>(null);
   /** -1 = starting pos, 0..N-1 = after that ply, null = follow live state. */
   const [viewingPly, setViewingPly] = useState<number | null>(null);
   const { theme } = useChessTheme();
@@ -147,11 +157,10 @@ export function ChessGame() {
   const selected =
     selection && selection.fen === fen ? selection.square : null;
 
-  const executeMove = useCallback(
-    (from: string, rawTo: string): boolean => {
+  const commitMove = useCallback(
+    (from: string, to: string, promotionPiece: PromotionPiece): boolean => {
       try {
-        const to = resolveCastlingTarget(game, from, rawTo);
-        const move = game.move({ from, to, promotion: "q" });
+        const move = game.move({ from, to, promotion: promotionPiece });
         if (!move) return false;
         setFen(game.fen());
         setLastMove({ from: move.from, to: move.to });
@@ -162,6 +171,20 @@ export function ChessGame() {
       }
     },
     [game],
+  );
+
+  const executeMove = useCallback(
+    (from: string, rawTo: string): boolean => {
+      const to = resolveCastlingTarget(game, from, rawTo);
+      // Defer promotion moves so the picker can ask the user. Until they
+      // pick, no state mutates — drag-snap-back is fine.
+      if (isPromotionMove(game, from, to)) {
+        setPromotion({ from, to, color: game.turn() });
+        return true;
+      }
+      return commitMove(from, to, "q");
+    },
+    [game, commitMove],
   );
 
   const onPieceDrop = useCallback(
@@ -334,6 +357,17 @@ export function ChessGame() {
           </div>
         </div>
       </div>
+
+      <PromotionPicker
+        open={promotion !== null}
+        color={promotion?.color ?? "w"}
+        onPick={(piece) => {
+          if (!promotion) return;
+          commitMove(promotion.from, promotion.to, piece);
+          setPromotion(null);
+        }}
+        onCancel={() => setPromotion(null)}
+      />
 
       <GameEndDialog
         open={endDialogOpen}
