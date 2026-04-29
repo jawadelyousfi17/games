@@ -1,26 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Button } from "@/components/ui/button";
 import { RightRail } from "./right-rail";
 import { MobileGameBar } from "./mobile-game-bar";
 import { GameActionBar } from "./game-action-bar";
-import { BoardFrame } from "./board-frame";
-import { GameEndDialog } from "./game-end-dialog";
-import { useGameReview } from "./use-game-review";
 import { useChessTheme } from "./use-chess-theme";
 import { deriveCaptured } from "@/lib/chess/captured";
-import { resolveCastlingTarget } from "@/lib/chess/castle";
 import { CapturedRow } from "./captured-row";
-import type { ChessEndReasonValue } from "@/lib/chess/realtime";
-import {
-  playGameEndSound,
-  playMoveSoundFromSan,
-  playOpeningSound,
-  preloadChessSounds,
-} from "@/lib/chess/sound";
 
 const TURN_LABEL: Record<"w" | "b", string> = {
   w: "White to move",
@@ -32,9 +21,9 @@ const TURN_LABEL: Record<"w" | "b", string> = {
 type Selection = { square: string; fen: string } | null;
 
 /**
- * Local pass-and-play board. Same layout shell as the online game (mobile
- * bar, board, right rail) so the design stays consistent. After the game
- * ends the user can walk through past positions via the move-nav.
+ * Local pass-and-play board, same layout shell as the online game so the
+ * style stays consistent. No clocks, no rating — just Reset / Undo control
+ * pair in place of the Resign action.
  */
 export function ChessGame() {
   const [game, setGame] = useState(() => new Chess());
@@ -44,114 +33,25 @@ export function ChessGame() {
   );
   const [selection, setSelection] = useState<Selection>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
-  /** -1 = starting pos, 0..N-1 = after that ply, null = follow live state. */
-  const [viewingPly, setViewingPly] = useState<number | null>(null);
   const { theme } = useChessTheme();
 
   // chess.js mutates `game` in place; bumping `fen` is enough to invalidate
-  // memos that depend on the live position.
+  // memos that depend on the live position. The dep is intentional even
+  // though `fen` is not read inside the function body.
   const history = useMemo(
     () => game.history(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [game, fen],
   );
   const captured = useMemo(() => deriveCaptured(history), [history]);
-  const review = useGameReview(history);
   const isOver = game.isCheckmate() || game.isStalemate() || game.isDraw();
-
-  // Auto-jump into review mode when the game ends.
-  useEffect(() => {
-    if (isOver && viewingPly === null && history.length > 0) {
-      setViewingPly(history.length - 1);
-    }
-  }, [isOver, viewingPly, history.length]);
-
-  // -------- Game-end dialog + sound --------
-  const [endDialogOpen, setEndDialogOpen] = useState(false);
-  const endTriggeredRef = useRef(false);
-  const endInfo = useMemo(
-    () => deriveLocalEnd(game),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [game, fen],
-  );
-  useEffect(() => {
-    if (!isOver || endTriggeredRef.current) return;
-    endTriggeredRef.current = true;
-    setEndDialogOpen(true);
-    playGameEndSound(endInfo.reason);
-  }, [isOver, endInfo.reason]);
-
-  // Reset the end-dialog trigger when the user starts a fresh game.
-  useEffect(() => {
-    if (!isOver) endTriggeredRef.current = false;
-  }, [isOver]);
-
-  // -------- Move sound effects --------
-  // Preload mp3s once on mount.
-  useEffect(() => {
-    preloadChessSounds();
-  }, []);
-
-  // Plays the opening cue when a fresh game begins. Tied to `game` identity
-  // so the "New game" button (which swaps in a new Chess instance) replays
-  // the fanfare. Skips when an undo brings us back to ply 0 in-game.
-  const openedForGameRef = useRef<Chess | null>(null);
-  useEffect(() => {
-    if (openedForGameRef.current !== game && history.length === 0) {
-      openedForGameRef.current = game;
-      playOpeningSound();
-    }
-  }, [game, history.length]);
-
-  const lastHistoryLenRef = useRef(history.length);
-  useEffect(() => {
-    const len = history.length;
-    if (len > lastHistoryLenRef.current) {
-      const san = history[len - 1];
-      if (san) playMoveSoundFromSan(san, len - 1);
-    }
-    lastHistoryLenRef.current = len;
-  }, [history]);
-
-  const isLiveView = viewingPly === null;
-  const currentPly = viewingPly ?? history.length - 1;
-
-  const seek = useCallback(
-    (ply: number) => {
-      const clamped = Math.max(-1, Math.min(history.length - 1, ply));
-      setViewingPly(
-        clamped === history.length - 1 && !isOver ? null : clamped,
-      );
-    },
-    [history.length, isOver],
-  );
-
-  // Prefer the authoritative live fen when at the last ply or live, so a
-  // rebuilt-from-history FEN can never visually rewind the board after a
-  // mating move.
-  const atLastPly = currentPly === history.length - 1;
-  const displayFen =
-    isLiveView || atLastPly
-      ? fen
-      : (review.positions.fens[currentPly + 1] ?? fen);
-  const displayLastMove =
-    isLiveView || atLastPly
-      ? lastMove
-      : currentPly >= 0
-        ? review.positions.moves[currentPly]
-        : null;
-  const displayChess = useMemo(
-    () => (isLiveView || atLastPly ? game : new Chess(displayFen)),
-    [isLiveView, atLastPly, game, displayFen],
-  );
 
   const selected =
     selection && selection.fen === fen ? selection.square : null;
 
   const executeMove = useCallback(
-    (from: string, rawTo: string): boolean => {
+    (from: string, to: string): boolean => {
       try {
-        const to = resolveCastlingTarget(game, from, rawTo);
         const move = game.move({ from, to, promotion: "q" });
         if (!move) return false;
         setFen(game.fen());
@@ -173,10 +73,10 @@ export function ChessGame() {
       sourceSquare: string;
       targetSquare: string | null;
     }) => {
-      if (!targetSquare || isOver || !isLiveView) return false;
+      if (!targetSquare || isOver) return false;
       return executeMove(sourceSquare, targetSquare);
     },
-    [isOver, isLiveView, executeMove],
+    [isOver, executeMove],
   );
 
   const onSquareClick = useCallback(
@@ -187,13 +87,12 @@ export function ChessGame() {
       square: string;
       piece: { pieceType: string } | null;
     }) => {
-      if (isOver || !isLiveView) return;
+      if (isOver) return;
       if (selected) {
         const legal: string[] = game
           .moves({ square: selected as Square, verbose: true })
           .map((m) => m.to);
-        const resolved = resolveCastlingTarget(game, selected, square);
-        if (legal.includes(square) || legal.includes(resolved)) {
+        if (legal.includes(square)) {
           executeMove(selected, square);
           return;
         }
@@ -204,7 +103,7 @@ export function ChessGame() {
       }
       setSelection(null);
     },
-    [game, isOver, isLiveView, selected, executeMove, fen],
+    [game, isOver, selected, executeMove, fen],
   );
 
   const reset = useCallback(() => {
@@ -213,7 +112,6 @@ export function ChessGame() {
     setFen(fresh.fen());
     setLastMove(null);
     setSelection(null);
-    setViewingPly(null);
   }, []);
 
   const undo = useCallback(() => {
@@ -231,32 +129,23 @@ export function ChessGame() {
 
   const squareStyles = useMemo<Record<string, React.CSSProperties>>(() => {
     const out: Record<string, React.CSSProperties> = {};
-    if (displayLastMove) {
-      out[displayLastMove.from] = { background: theme.lastMove };
-      out[displayLastMove.to] = { background: theme.lastMove };
+    if (lastMove) {
+      out[lastMove.from] = { background: theme.lastMove };
+      out[lastMove.to] = { background: theme.lastMove };
     }
-    if (displayChess.inCheck()) {
-      const kingSq = findKingSquare(displayChess, displayChess.turn());
+    if (game.inCheck()) {
+      const kingSq = findKingSquare(game, game.turn());
       if (kingSq) out[kingSq] = { background: theme.check };
     }
-    if (isLiveView && selected) {
+    if (selected) {
       out[selected] = {
         ...(out[selected] ?? {}),
         background: theme.lastMove,
         boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.55)",
       };
-      const verbose = displayChess.moves({
-        square: selected as Square,
-        verbose: true,
-      });
-      const targets = new Set<string>(verbose.map((m) => m.to));
-      for (const m of verbose) {
-        if (m.flags.includes("k")) {
-          targets.add(m.to[0] === "g" ? `h${m.to[1]}` : m.to);
-        } else if (m.flags.includes("q")) {
-          targets.add(m.to[0] === "c" ? `a${m.to[1]}` : m.to);
-        }
-      }
+      const targets = game
+        .moves({ square: selected as Square, verbose: true })
+        .map((m) => m.to);
       for (const t of targets) {
         out[t] = {
           ...(out[t] ?? {}),
@@ -266,20 +155,17 @@ export function ChessGame() {
       }
     }
     return out;
-  }, [displayLastMove, theme.lastMove, theme.check, displayChess, selected, isLiveView]);
+  }, [lastMove, theme.lastMove, theme.check, game, selected]);
 
   const turnLabel = isOver ? "Game over" : TURN_LABEL[game.turn()];
 
   return (
     <div className="relative h-screen">
-      <div className="flex h-full flex-col p-6 xl:pr-[444px] 2xl:pr-[584px]">
+      <div className="flex h-full flex-col overflow-y-auto p-6 xl:pr-[584px]">
         <MobileGameBar
           history={history}
           banner={turnLabel}
           onFlipBoard={onFlipBoard}
-          review={review}
-          currentPly={currentPly}
-          onSeek={seek}
         />
         <SimplePlayerRow
           label={orientation === "white" ? "Black" : "White"}
@@ -289,23 +175,21 @@ export function ChessGame() {
           active={!isOver && game.turn() === (orientation === "white" ? "b" : "w")}
         />
 
-        <div className="flex min-h-0 flex-1 items-center justify-center py-2">
-          <BoardFrame>
-            <Chessboard
-              options={{
-                position: displayFen,
-                onPieceDrop,
-                onSquareClick,
-                allowDragging: !isOver && isLiveView,
-                animationDurationInMs: 200,
-                darkSquareStyle: { backgroundColor: theme.dark },
-                lightSquareStyle: { backgroundColor: theme.light },
-                squareStyles,
-                boardOrientation: orientation,
-                boardStyle: { borderRadius: 0 },
-              }}
-            />
-          </BoardFrame>
+        <div className="relative mx-auto aspect-square w-full max-w-[min(100%,calc(100vh-12rem))] overflow-hidden ring-1 ring-white/10 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.6)]">
+          <Chessboard
+            options={{
+              position: fen,
+              onPieceDrop,
+              onSquareClick,
+              allowDragging: !isOver,
+              animationDurationInMs: 200,
+              darkSquareStyle: { backgroundColor: theme.dark },
+              lightSquareStyle: { backgroundColor: theme.light },
+              squareStyles,
+              boardOrientation: orientation,
+              boardStyle: { borderRadius: 0 },
+            }}
+          />
         </div>
 
         <SimplePlayerRow
@@ -334,26 +218,11 @@ export function ChessGame() {
         </div>
       </div>
 
-      <GameEndDialog
-        open={endDialogOpen}
-        onOpenChange={setEndDialogOpen}
-        outcome={endInfo.outcome}
-        reason={endInfo.reason}
-        title={endInfo.title}
-        qualities={review.qualities}
-        playerColor={endInfo.playerColor}
-        newGameHref="/games/chess/play/local"
-        newGameLabel="New game"
-      />
-
-      <aside className="fixed right-0 top-0 hidden h-screen border-l border-white/5 xl:flex xl:w-[420px] 2xl:w-[560px]">
+      <aside className="fixed right-0 top-0 hidden h-screen w-[120px] border-l border-white/5 xl:flex">
         <RightRail
           history={history}
           banner={turnLabel}
           onFlipBoard={onFlipBoard}
-          review={review}
-          currentPly={currentPly}
-          onSeek={seek}
         />
       </aside>
     </div>
@@ -382,40 +251,6 @@ function SimplePlayerRow({
       <CapturedRow pieces={captured} />
     </div>
   );
-}
-
-/**
- * Maps a chess.js terminal state to the GameEndDialog inputs. For local
- * pass-and-play we don't have a "you" perspective, so winner-side titles
- * read more naturally than "You won". `playerColor` resolves to the
- * winner's color when there is one — it filters the stat row to that side.
- */
-function deriveLocalEnd(game: Chess): {
-  outcome: "win" | "loss" | "draw";
-  reason: ChessEndReasonValue | null;
-  title: string;
-  playerColor: "w" | "b" | null;
-} {
-  if (game.isCheckmate()) {
-    // turn() returns the side that's mated; the other side is the winner.
-    const winnerColor: "w" | "b" = game.turn() === "w" ? "b" : "w";
-    const winnerLabel = winnerColor === "w" ? "White" : "Black";
-    return {
-      outcome: "win",
-      reason: "CHECKMATE",
-      title: `${winnerLabel} Won`,
-      playerColor: winnerColor,
-    };
-  }
-  if (game.isStalemate())
-    return { outcome: "draw", reason: "STALEMATE", title: "Draw", playerColor: null };
-  if (game.isInsufficientMaterial())
-    return { outcome: "draw", reason: "DRAW_INSUFFICIENT", title: "Draw", playerColor: null };
-  if (game.isThreefoldRepetition())
-    return { outcome: "draw", reason: "DRAW_THREEFOLD", title: "Draw", playerColor: null };
-  if (game.isDraw())
-    return { outcome: "draw", reason: "DRAW_FIFTY_MOVE", title: "Draw", playerColor: null };
-  return { outcome: "draw", reason: null, title: "Game over", playerColor: null };
 }
 
 function findKingSquare(game: Chess, color: "w" | "b"): string | null {
