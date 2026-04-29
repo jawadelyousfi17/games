@@ -85,7 +85,10 @@ jobs:
           # Bump the action's verbosity + don't cut output on long commands.
           debug: true
           command_timeout: 30m
-          script_stop: true
+          # script_stop:false leaves error handling to our own `set -e` so
+          # the bootstrap block (which probes optional paths) doesn't trip
+          # on absent directories before we're ready for strict mode.
+          script_stop: false
           envs: GIT_SHA,GIT_REF,RUN_ID
           script: |
             # No `set -e` until after PATH bootstrap. When the script ran
@@ -105,8 +108,14 @@ jobs:
               fi
             done
             # volta + asdf + common manual paths
-            [ -d "$HOME/.volta/bin" ] && export PATH="$HOME/.volta/bin:$PATH" && echo "  + $HOME/.volta/bin"
-            [ -d "$HOME/.asdf/shims" ] && export PATH="$HOME/.asdf/shims:$PATH" && echo "  + $HOME/.asdf/shims"
+            if [ -d "$HOME/.volta/bin" ]; then
+              export PATH="$HOME/.volta/bin:$PATH"
+              echo "  + $HOME/.volta/bin"
+            fi
+            if [ -d "$HOME/.asdf/shims" ]; then
+              export PATH="$HOME/.asdf/shims:$PATH"
+              echo "  + $HOME/.asdf/shims"
+            fi
             for p in /usr/local/bin /usr/local/node/bin "$HOME/.local/bin" "$HOME/.npm-global/bin"; do
               if [ -d "$p" ]; then
                 export PATH="$p:$PATH"
