@@ -88,8 +88,45 @@ jobs:
           script_stop: true
           envs: GIT_SHA,GIT_REF,RUN_ID
           script: |
-            set -euo pipefail
+            # No `set -e` until after PATH bootstrap. When the script ran
+            # under strict mode from line 1, any silent failure inside the
+            # PATH-discovery block (or in the action's wrapper) killed the
+            # whole script with no actionable output.
+            set -o pipefail
 
+            echo "▶ bootstrap"
+            export PATH="$HOME/.nvm/versions/node/*/bin:$PATH"
+            # Glob doesn't expand inside quoted assignments; do it
+            # explicitly: prepend every nvm node bin we find.
+            for d in "$HOME"/.nvm/versions/node/*/bin; do
+              if [ -d "$d" ]; then
+                export PATH="$d:$PATH"
+                echo "  + $d"
+              fi
+            done
+            # volta + asdf + common manual paths
+            [ -d "$HOME/.volta/bin" ] && export PATH="$HOME/.volta/bin:$PATH" && echo "  + $HOME/.volta/bin"
+            [ -d "$HOME/.asdf/shims" ] && export PATH="$HOME/.asdf/shims:$PATH" && echo "  + $HOME/.asdf/shims"
+            for p in /usr/local/bin /usr/local/node/bin "$HOME/.local/bin" "$HOME/.npm-global/bin"; do
+              if [ -d "$p" ]; then
+                export PATH="$p:$PATH"
+                echo "  + $p"
+              fi
+            done
+
+            echo "▶ tool check"
+            echo "  PATH=$PATH"
+            echo "  node: $(command -v node || echo MISSING) $(node -v 2>/dev/null || true)"
+            echo "  npm:  $(command -v npm  || echo MISSING) $(npm -v 2>/dev/null || true)"
+            echo "  pm2:  $(command -v pm2  || echo MISSING) $(pm2 -v 2>/dev/null || true)"
+            echo "  git:  $(command -v git  || echo MISSING) $(git --version 2>/dev/null || true)"
+            if ! command -v npm >/dev/null; then
+              echo "::error::npm not on PATH after bootstrap. PATH was: $PATH"
+              exit 127
+            fi
+
+            # Strict mode + traps from here on — bootstrap is done.
+            set -eu
             log() { echo -e "\n\033[1;36m▶ $*\033[0m"; }
             ok()  { echo -e "\033[1;32m✔ $*\033[0m"; }
             fail_handler() {
@@ -99,43 +136,10 @@ jobs:
             }
             trap fail_handler ERR
 
-            log "resolve node/npm PATH"
-            # SSH non-interactive sessions skip dotfiles, so nvm/volta/asdf
-            # bins are not on PATH. Sourcing nvm.sh has been flaky here
-            # (silent exits), so instead we discover the binary directories
-            # statically and prepend them. Safe + idempotent.
-            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-            # nvm: pick the most-recently-modified node version's bin dir.
-            if [ -d "$NVM_DIR/versions/node" ]; then
-              # ls -t sorts by mtime desc; head -1 takes the newest.
-              nvm_latest=$(ls -t "$NVM_DIR/versions/node" 2>/dev/null | head -n 1 || true)
-              if [ -n "${nvm_latest:-}" ] && [ -d "$NVM_DIR/versions/node/$nvm_latest/bin" ]; then
-                export PATH="$NVM_DIR/versions/node/$nvm_latest/bin:$PATH"
-                echo "added nvm bin: $NVM_DIR/versions/node/$nvm_latest/bin"
-              fi
-            fi
-            # volta
-            [ -d "$HOME/.volta/bin" ] && export PATH="$HOME/.volta/bin:$PATH"
-            # asdf shims
-            [ -d "$HOME/.asdf/shims" ] && export PATH="$HOME/.asdf/shims:$PATH"
-            # Common manual install locations
-            for p in /usr/local/bin /usr/local/node/bin "$HOME/.local/bin" "$HOME/.npm-global/bin"; do
-              [ -d "$p" ] && export PATH="$p:$PATH"
-            done
-
             log "host environment"
             uname -a
             whoami
             pwd
-            echo "PATH=$PATH"
-            echo "node:    $(command -v node || echo 'NOT FOUND') → $(node -v 2>/dev/null || echo 'missing')"
-            echo "npm:     $(command -v npm || echo 'NOT FOUND') → $(npm -v 2>/dev/null || echo 'missing')"
-            echo "pm2:     $(command -v pm2 || echo 'NOT FOUND') → $(pm2 -v 2>/dev/null || echo 'missing')"
-            echo "git:     $(command -v git || echo 'NOT FOUND') → $(git --version 2>/dev/null || echo 'missing')"
-            if ! command -v npm >/dev/null; then
-              echo "::error::npm still not on PATH. SSH into the VPS and run 'which npm' interactively, then add the directory to PATH manually in this workflow."
-              exit 127
-            fi
             echo "free disk:" ; df -h . | tail -n +1
             echo "free mem:"  ; free -h || true
 
