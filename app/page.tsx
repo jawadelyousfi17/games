@@ -47,7 +47,7 @@ export default async function Page() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-lime ring-1 ring-white/10">
                 <Crown className="h-3.5 w-3.5" strokeWidth={2.25} />
-                For 1337 students
+                For 1337 students Find find
               </div>
               <h1 className="mt-5 text-[clamp(40px,5vw,64px)] font-extrabold leading-[0.95] tracking-[-0.02em] text-white">
                 A small games club
