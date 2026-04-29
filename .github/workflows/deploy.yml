@@ -26,24 +26,51 @@ jobs:
           echo "::endgroup::"
 
       - name: Validate required secrets
+        env:
+          # Reading via env: avoids the expression being inlined as an empty
+          # string in the script body — the bash test then sees the real
+          # value (or genuine emptiness) at runtime.
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          PM2_APP_NAME: ${{ secrets.PM2_APP_NAME }}
         run: |
-          echo "::group::Secret presence check (values masked)"
+          echo "::group::Secret presence check"
+          echo "Repository: ${{ github.repository }}"
+          echo "Triggered by: ${{ github.actor }} via ${{ github.event_name }}"
+          echo "Forked PR? secrets are not exposed to PRs from forks."
+          echo ""
           missing=0
           check() {
-            if [ -z "$2" ]; then
-              echo "✗ $1 is NOT set"
+            local name=$1
+            local val=${!name-}
+            if [ -z "$val" ]; then
+              echo "✗ $name is NOT set"
               missing=1
             else
-              echo "✓ $1 is set (len=${#2})"
+              echo "✓ $name is set (len=${#val})"
             fi
           }
-          check VPS_HOST       "${{ secrets.VPS_HOST }}"
-          check VPS_USER       "${{ secrets.VPS_USER }}"
-          check VPS_SSH_KEY    "${{ secrets.VPS_SSH_KEY }}"
-          check DEPLOY_PATH    "${{ secrets.DEPLOY_PATH }}"
-          check PM2_APP_NAME   "${{ secrets.PM2_APP_NAME }}"
+          check VPS_HOST
+          check VPS_USER
+          check VPS_SSH_KEY
+          check DEPLOY_PATH
+          check PM2_APP_NAME
+          # VPS_PORT optional — informational only
+          if [ -z "${VPS_PORT:-}" ]; then
+            echo "· VPS_PORT not set (will default to 22)"
+          else
+            echo "· VPS_PORT set to ${VPS_PORT}"
+          fi
           if [ "$missing" = "1" ]; then
-            echo "::error::One or more required secrets are missing — see list above"
+            cat <<EOF
+          ::error::Missing repository secrets. Add them at:
+            https://github.com/${{ github.repository }}/settings/secrets/actions
+          Make sure they are under "Repository secrets" tab — not Environment
+          or Organization scope (those need extra workflow config).
+          EOF
             exit 1
           fi
           echo "::endgroup::"
@@ -72,14 +99,40 @@ jobs:
             }
             trap fail_handler ERR
 
+            log "load shell env (nvm / node version managers)"
+            # SSH non-interactive sessions skip ~/.bashrc, so nvm-installed
+            # node/npm aren't on PATH by default. Source the common locations
+            # if they exist — safe no-op when they don't.
+            export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              # shellcheck disable=SC1091
+              . "$NVM_DIR/nvm.sh"
+              echo "loaded nvm from $NVM_DIR/nvm.sh"
+            fi
+            if [ -s "$HOME/.profile" ]; then . "$HOME/.profile"; fi
+            if [ -s "$HOME/.bashrc" ]; then . "$HOME/.bashrc" || true; fi
+            # volta
+            if [ -d "$HOME/.volta/bin" ]; then export PATH="$HOME/.volta/bin:$PATH"; fi
+            # asdf
+            if [ -s "$HOME/.asdf/asdf.sh" ]; then . "$HOME/.asdf/asdf.sh"; fi
+            # Common manual install locations as a last resort.
+            for p in /usr/local/bin /usr/local/node/bin "$HOME/.local/bin" "$HOME/.npm-global/bin"; do
+              [ -d "$p" ] && export PATH="$p:$PATH"
+            done
+
             log "host environment"
             uname -a
             whoami
             pwd
-            echo "node:    $(command -v node) → $(node -v 2>/dev/null || echo 'missing')"
-            echo "npm:     $(command -v npm) → $(npm -v 2>/dev/null || echo 'missing')"
-            echo "pm2:     $(command -v pm2) → $(pm2 -v 2>/dev/null || echo 'missing')"
-            echo "git:     $(command -v git) → $(git --version 2>/dev/null || echo 'missing')"
+            echo "PATH=$PATH"
+            echo "node:    $(command -v node || echo 'NOT FOUND') → $(node -v 2>/dev/null || echo 'missing')"
+            echo "npm:     $(command -v npm || echo 'NOT FOUND') → $(npm -v 2>/dev/null || echo 'missing')"
+            echo "pm2:     $(command -v pm2 || echo 'NOT FOUND') → $(pm2 -v 2>/dev/null || echo 'missing')"
+            echo "git:     $(command -v git || echo 'NOT FOUND') → $(git --version 2>/dev/null || echo 'missing')"
+            if ! command -v npm >/dev/null; then
+              echo "::error::npm still not on PATH. SSH into the VPS and run 'which npm' interactively, then add the directory to PATH manually in this workflow."
+              exit 127
+            fi
             echo "free disk:" ; df -h . | tail -n +1
             echo "free mem:"  ; free -h || true
 
