@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth/auth-provider";
 import { prisma } from "@/lib/prisma/prisma";
+import { pruneStaleQueueTickets } from "@/lib/chess/queue-cleanup";
 
 export type MatchPollResult =
   | { kind: "none" }
@@ -26,6 +27,11 @@ export async function getMyChessMatch(): Promise<MatchPollResult> {
     orderBy: { startedAt: "desc" },
   });
   if (ongoing) return { kind: "found", gameId: ongoing.id };
+
+  // Prune any tickets that have outlived the search window. If the caller's
+  // own ticket is among them, the lookup below returns null → "none", which
+  // the client uses to drop back to the idle CTA.
+  await pruneStaleQueueTickets();
 
   const ticket = await prisma.chessQueueTicket.findUnique({
     where: { userId },

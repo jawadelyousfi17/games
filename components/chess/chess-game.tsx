@@ -12,9 +12,15 @@ import { GameEndDialog } from "./game-end-dialog";
 import { useGameReview } from "./use-game-review";
 import { useChessTheme } from "./use-chess-theme";
 import { deriveCaptured } from "@/lib/chess/captured";
+import { resolveCastlingTarget } from "@/lib/chess/castle";
 import { CapturedRow } from "./captured-row";
 import type { ChessEndReasonValue } from "@/lib/chess/realtime";
-import { playGameEndSound } from "@/lib/chess/sound";
+import {
+  playGameEndSound,
+  playMoveSoundFromSan,
+  playOpeningSound,
+  preloadChessSounds,
+} from "@/lib/chess/sound";
 
 const TURN_LABEL: Record<"w" | "b", string> = {
   w: "White to move",
@@ -72,13 +78,40 @@ export function ChessGame() {
     if (!isOver || endTriggeredRef.current) return;
     endTriggeredRef.current = true;
     setEndDialogOpen(true);
-    playGameEndSound(endInfo.outcome);
-  }, [isOver, endInfo.outcome]);
+    playGameEndSound(endInfo.reason);
+  }, [isOver, endInfo.reason]);
 
   // Reset the end-dialog trigger when the user starts a fresh game.
   useEffect(() => {
     if (!isOver) endTriggeredRef.current = false;
   }, [isOver]);
+
+  // -------- Move sound effects --------
+  // Preload mp3s once on mount.
+  useEffect(() => {
+    preloadChessSounds();
+  }, []);
+
+  // Plays the opening cue when a fresh game begins. Tied to `game` identity
+  // so the "New game" button (which swaps in a new Chess instance) replays
+  // the fanfare. Skips when an undo brings us back to ply 0 in-game.
+  const openedForGameRef = useRef<Chess | null>(null);
+  useEffect(() => {
+    if (openedForGameRef.current !== game && history.length === 0) {
+      openedForGameRef.current = game;
+      playOpeningSound();
+    }
+  }, [game, history.length]);
+
+  const lastHistoryLenRef = useRef(history.length);
+  useEffect(() => {
+    const len = history.length;
+    if (len > lastHistoryLenRef.current) {
+      const san = history[len - 1];
+      if (san) playMoveSoundFromSan(san, len - 1);
+    }
+    lastHistoryLenRef.current = len;
+  }, [history]);
 
   const isLiveView = viewingPly === null;
   const currentPly = viewingPly ?? history.length - 1;
@@ -116,8 +149,9 @@ export function ChessGame() {
     selection && selection.fen === fen ? selection.square : null;
 
   const executeMove = useCallback(
-    (from: string, to: string): boolean => {
+    (from: string, rawTo: string): boolean => {
       try {
+        const to = resolveCastlingTarget(game, from, rawTo);
         const move = game.move({ from, to, promotion: "q" });
         if (!move) return false;
         setFen(game.fen());
@@ -158,7 +192,8 @@ export function ChessGame() {
         const legal: string[] = game
           .moves({ square: selected as Square, verbose: true })
           .map((m) => m.to);
-        if (legal.includes(square)) {
+        const resolved = resolveCastlingTarget(game, selected, square);
+        if (legal.includes(square) || legal.includes(resolved)) {
           executeMove(selected, square);
           return;
         }
@@ -210,9 +245,18 @@ export function ChessGame() {
         background: theme.lastMove,
         boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.55)",
       };
-      const targets = displayChess
-        .moves({ square: selected as Square, verbose: true })
-        .map((m) => m.to);
+      const verbose = displayChess.moves({
+        square: selected as Square,
+        verbose: true,
+      });
+      const targets = new Set<string>(verbose.map((m) => m.to));
+      for (const m of verbose) {
+        if (m.flags.includes("k")) {
+          targets.add(m.to[0] === "g" ? `h${m.to[1]}` : m.to);
+        } else if (m.flags.includes("q")) {
+          targets.add(m.to[0] === "c" ? `a${m.to[1]}` : m.to);
+        }
+      }
       for (const t of targets) {
         out[t] = {
           ...(out[t] ?? {}),

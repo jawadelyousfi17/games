@@ -15,9 +15,19 @@ import type { EngineEval } from "@/lib/chess/move-quality";
 const ENGINE_CDN_URL =
   "https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js";
 
+type AnalyzeOpts = {
+  /** Search depth in plies. Higher = stronger but slower. */
+  depth?: number;
+  /** UCI Skill Level (0–20). Lower = weaker, more random play. */
+  skillLevel?: number;
+  /** Hard time cap per search (ms). Combined with depth — engine stops on
+   *  whichever fires first. Useful for bot moves where wall-clock matters. */
+  movetimeMs?: number;
+};
+
 type AnalyzeRequest = {
   fen: string;
-  depth: number;
+  opts: AnalyzeOpts;
   resolve: (e: EngineEval) => void;
 };
 
@@ -25,7 +35,7 @@ export type EngineStatus = "loading" | "ready" | "error";
 
 export function useStockfish(): {
   status: EngineStatus;
-  analyze: (fen: string, depth?: number) => Promise<EngineEval | null>;
+  analyze: (fen: string, opts?: AnalyzeOpts) => Promise<EngineEval | null>;
 } {
   const workerRef = useRef<Worker | null>(null);
   const queueRef = useRef<AnalyzeRequest[]>([]);
@@ -103,9 +113,18 @@ export function useStockfish(): {
       if (!w || !next) return;
       busyRef.current = true;
       pendingRef.current = { cp: null, mate: null, bestMove: null };
+      const depth = next.opts.depth ?? 12;
+      if (next.opts.skillLevel !== undefined) {
+        const clamped = Math.max(0, Math.min(20, Math.round(next.opts.skillLevel)));
+        w.postMessage(`setoption name Skill Level value ${clamped}`);
+      }
       w.postMessage("ucinewgame");
       w.postMessage(`position fen ${next.fen}`);
-      w.postMessage(`go depth ${next.depth}`);
+      const goCmd =
+        next.opts.movetimeMs !== undefined
+          ? `go depth ${depth} movetime ${next.opts.movetimeMs}`
+          : `go depth ${depth}`;
+      w.postMessage(goCmd);
     }
 
     flushRef.current = flush;
@@ -125,10 +144,10 @@ export function useStockfish(): {
   const flushRef = useRef<() => void>(() => {});
 
   const analyze = useCallback(
-    (fen: string, depth = 12): Promise<EngineEval | null> => {
+    (fen: string, opts: AnalyzeOpts = {}): Promise<EngineEval | null> => {
       if (!workerRef.current) return Promise.resolve(null);
       return new Promise((resolve) => {
-        queueRef.current.push({ fen, depth, resolve });
+        queueRef.current.push({ fen, opts, resolve });
         flushRef.current();
       });
     },

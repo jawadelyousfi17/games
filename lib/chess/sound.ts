@@ -1,75 +1,94 @@
 /**
- * Tiny WebAudio synth for game-end fanfares.
- *
- * Three short sequences (win / loss / draw) stitched together from oscillator
- * notes — small enough to inline so we don't ship audio assets, distinctive
- * enough to recognize the outcome by ear.
+ * Audio cues for the chess board. MP3 assets ship under
+ * /public/sounds/chess/ — preloaded HTMLAudioElements per source so
+ * subsequent triggers are instant.
  */
 
-type Outcome = "win" | "loss" | "draw";
+import type { ChessEndReasonValue } from "./realtime";
 
-const SEQUENCES: Record<Outcome, Array<{ freq: number; ms: number }>> = {
-  // Major triad ascending — celebratory.
-  win: [
-    { freq: 523.25, ms: 120 }, // C5
-    { freq: 659.25, ms: 120 }, // E5
-    { freq: 783.99, ms: 220 }, // G5
-    { freq: 1046.5, ms: 360 }, // C6
-  ],
-  // Minor triad descending — defeat.
-  loss: [
-    { freq: 440.0, ms: 160 }, // A4
-    { freq: 369.99, ms: 160 }, // F#4
-    { freq: 293.66, ms: 320 }, // D4
-  ],
-  // Two-note neutral.
-  draw: [
-    { freq: 523.25, ms: 180 },
-    { freq: 392.0, ms: 280 },
-  ],
-};
+const SRC = {
+  whiteMove: "/sounds/chess/chess-white-move.mp3",
+  blackMove: "/sounds/chess/chess-black-move.mp3",
+  whiteCapture: "/sounds/chess/chess-white-capture.mp3",
+  blackCapture: "/sounds/chess/chess-black-capture.mp3",
+  check: "/sounds/chess/chess-check.mp3",
+  castle: "/sounds/chess/chess-casttle.mp3",
+  opening: "/sounds/chess/chess-openning.mp3",
+  checkmate: "/sounds/chess/chess-game-over-by-checkmate.mp3",
+  gameOver: "/sounds/chess/chess-game-over-not-by-checkmate.mp3",
+} as const;
 
-let cachedCtx: AudioContext | null = null;
+const cache = new Map<string, HTMLAudioElement>();
 
-function getCtx(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  if (cachedCtx) return cachedCtx;
-  const Ctor =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext?: typeof AudioContext })
-      .webkitAudioContext;
-  if (!Ctor) return null;
-  cachedCtx = new Ctor();
-  return cachedCtx;
+function play(src: string, volume = 0.6): void {
+  if (typeof window === "undefined") return;
+  let el = cache.get(src);
+  if (!el) {
+    el = new Audio(src);
+    el.preload = "auto";
+    cache.set(src, el);
+  }
+  try {
+    el.currentTime = 0;
+  } catch {
+    /* some browsers throw when seeking before metadata loads */
+  }
+  el.volume = volume;
+  void el.play().catch(() => {
+    /* autoplay policy or first-user-gesture not yet given; silent fail */
+  });
 }
 
 /**
- * Plays the synthesized fanfare for a given outcome. Resolves once the last
- * note has scheduled — the actual audio plays asynchronously via the audio
- * graph. No-op when WebAudio isn't available.
+ * Pre-warm the audio cache so the first move's sound isn't delayed by the
+ * browser fetching the asset. Safe to call repeatedly.
  */
-export function playGameEndSound(outcome: Outcome): void {
-  const ctx = getCtx();
-  if (!ctx) return;
-  // Browsers suspend new contexts until a user gesture; resume just in case.
-  if (ctx.state === "suspended") void ctx.resume();
-
-  const sequence = SEQUENCES[outcome];
-  let cursor = ctx.currentTime + 0.02;
-
-  for (const note of sequence) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.value = note.freq;
-    // Quick attack/decay envelope so the notes don't click.
-    gain.gain.setValueAtTime(0, cursor);
-    gain.gain.linearRampToValueAtTime(0.18, cursor + 0.02);
-    gain.gain.linearRampToValueAtTime(0, cursor + note.ms / 1000);
-
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(cursor);
-    osc.stop(cursor + note.ms / 1000 + 0.05);
-    cursor += note.ms / 1000;
+export function preloadChessSounds(): void {
+  if (typeof window === "undefined") return;
+  for (const src of Object.values(SRC)) {
+    if (cache.has(src)) continue;
+    const el = new Audio(src);
+    el.preload = "auto";
+    cache.set(src, el);
   }
+}
+
+/** Plays the opening fanfare — used when a fresh game begins. */
+export function playOpeningSound(): void {
+  play(SRC.opening, 0.5);
+}
+
+/**
+ * Plays the appropriate cue for the most recent move. Decodes the SAN
+ * string for capture/check/castle/mate flags; falls back to a side-specific
+ * move sound when the move is unremarkable. Mate plays nothing here — the
+ * game-end sound covers it.
+ *
+ * @param san  Standard algebraic notation of the move (e.g. "Nxe5+", "O-O").
+ * @param plyIndex  Zero-based ply index — even = white moved, odd = black.
+ */
+export function playMoveSoundFromSan(san: string, plyIndex: number): void {
+  if (san.includes("#")) return; // game-end sound takes over
+  if (san.startsWith("O-O")) {
+    play(SRC.castle);
+    return;
+  }
+  if (san.includes("+")) {
+    play(SRC.check);
+    return;
+  }
+  const isWhiteMove = plyIndex % 2 === 0;
+  if (san.includes("x")) {
+    play(isWhiteMove ? SRC.whiteCapture : SRC.blackCapture);
+    return;
+  }
+  play(isWhiteMove ? SRC.whiteMove : SRC.blackMove);
+}
+
+/**
+ * Plays the game-end cue. Distinguishes checkmate from every other
+ * terminal reason so the mate sound feels weightier.
+ */
+export function playGameEndSound(endReason: ChessEndReasonValue | null): void {
+  play(endReason === "CHECKMATE" ? SRC.checkmate : SRC.gameOver, 0.7);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, Suspense } from "react";
+import { useTransition, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Crown, ArrowLeft } from "lucide-react";
 import { loginAction } from "@/actions/auth/login";
@@ -9,18 +9,19 @@ import { Spinner } from "@/components/ui/spinner";
 import { LobbyBoardPreview } from "@/components/chess/lobby-board-preview";
 
 function LoginContent() {
-  const [loading, setLoading] = useState(false);
+  // useTransition flips `isPending` synchronously and React paints the
+  // loading UI before the server action runs — plain setState was racing
+  // with the redirect response and never made it to the screen.
+  const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
 
-  async function handleLogin() {
-    setLoading(true);
-    try {
+  function handleLogin() {
+    startTransition(async () => {
       await loginAction(callbackUrl || undefined);
-    } finally {
-      setLoading(false);
-    }
+    });
   }
+  const loading = isPending;
 
   return (
     <div className="relative grid min-h-screen bg-navy-950 text-navy-50 lg:grid-cols-[1fr_minmax(0,1.1fr)]">
@@ -60,16 +61,22 @@ function LoginContent() {
             type="button"
             onClick={handleLogin}
             disabled={loading}
-            className="btn-3d-lime mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-md text-[15px] font-bold text-navy-950"
+            aria-busy={loading}
+            className="btn-3d-lime mt-8 flex h-14 w-full items-center justify-center gap-3 rounded-md text-[15px] font-bold text-navy-950 disabled:cursor-progress"
           >
             {loading ? (
-              <Spinner className="h-5 w-5" />
+              <>
+                <Spinner className="h-5 w-5" />
+                Redirecting to intra…
+              </>
             ) : (
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-navy-950 text-[12px] font-extrabold text-brand-lime">
-                42
-              </span>
+              <>
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-navy-950 text-[12px] font-extrabold text-brand-lime">
+                  42
+                </span>
+                Continue with intra
+              </>
             )}
-            Continue with intra
           </button>
 
           <p className="mt-6 text-[12px] leading-relaxed text-navy-400">

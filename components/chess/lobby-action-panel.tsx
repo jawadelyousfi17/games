@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import { Plus, Users, Swords, UserPlus, Trophy } from "lucide-react";
+import { Plus, Users, Swords, Bot, Trophy } from "lucide-react";
 import { QueueButton } from "./queue-button";
 import { TimeControlPicker } from "./time-control-picker";
 import { OnlinePlayersList } from "./online-players-list";
@@ -121,7 +122,13 @@ function NewGameTab({
       <QueueButton timeControlId={timeControlId} />
 
       <BattleAction onlineCount={onlineCount} onClick={onOpenPlayers} />
-      <SecondaryAction Icon={UserPlus} label="Play a Friend" disabled />
+      <Link
+        href="/games/chess/play/bot"
+        className="btn-3d-dark flex h-14 items-center justify-center gap-2.5 rounded-md text-[15px] font-semibold text-white ring-1 ring-white/5"
+      >
+        <Bot className="h-5 w-5" strokeWidth={2} />
+        Play vs Bot
+      </Link>
       <SecondaryAction Icon={Trophy} label="Tournaments" disabled />
     </>
   );

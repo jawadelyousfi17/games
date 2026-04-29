@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth/auth-provider";
 import { prisma } from "@/lib/prisma/prisma";
 import { DEFAULT_RATING } from "@/lib/chess/elo";
+import { pruneStaleQueueTickets } from "@/lib/chess/queue-cleanup";
 import {
   resolveTimeControl,
   type TimeControlId,
@@ -32,6 +33,10 @@ export async function enqueueChess(
   const userId = session.user.id;
 
   const tc = resolveTimeControl(timeControlId);
+
+  // Drop abandoned tickets so we never match against a tab that's been
+  // closed for minutes. Cheap and deterministic — runs on every enqueue.
+  await pruneStaleQueueTickets();
 
   // Reuse an in-progress game if one already exists for this user.
   const ongoing = await prisma.chessGame.findFirst({

@@ -48,7 +48,9 @@ export function OnlinePlayersList() {
   }, []);
 
   // Subscribe to user:online / user:offline. On any transition we refetch
-  // the canonical list — small + cheap, avoids hand-rolled merges.
+  // the canonical list — small + cheap, avoids hand-rolled merges. A 15s
+  // background tick also runs so playing/online flips when games start or
+  // end (no dedicated socket event for those transitions yet).
   useEffect(() => {
     const socket: Socket = io({
       path: "/socket.io",
@@ -63,7 +65,10 @@ export function OnlinePlayersList() {
     };
     socket.on("user:online", refresh);
     socket.on("user:offline", refresh);
+
+    const tick = setInterval(refresh, 15_000);
     return () => {
+      clearInterval(tick);
       socket.disconnect();
     };
   }, []);
@@ -108,6 +113,7 @@ export function OnlinePlayersList() {
         login: r.login,
         image: r.image,
         rating: r.rating,
+        playing: r.playing,
         online: r.online,
       }));
     }
@@ -194,6 +200,14 @@ function PlayerRow({
   busy: boolean;
   onChallenge: () => void;
 }) {
+  // "playing" beats "online" — a busy player can't accept a fresh challenge,
+  // so disable the button and surface the in-game state in the chip.
+  const status: "playing" | "online" | "offline" = row.playing
+    ? "playing"
+    : row.online
+      ? "online"
+      : "offline";
+  const chip = STATUS_CHIPS[status];
   return (
     <div className="flex items-center gap-2.5 rounded-md bg-navy-800 px-2.5 py-2 ring-1 ring-white/5">
       <Avatar className="h-8 w-8 rounded-md border border-white/10">
@@ -207,20 +221,21 @@ function PlayerRow({
           <span className="truncate text-[13px] font-semibold text-white">
             {row.login}
           </span>
-          {row.online && (
-            <span
-              title="Online"
-              className="h-2 w-2 rounded-full bg-brand-lime ring-2 ring-navy-800"
-            />
-          )}
+          <span
+            title={chip.title}
+            className={`flex items-center gap-1 rounded-sm px-1.5 py-px text-[10px] font-bold uppercase tracking-wider ${chip.className}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${chip.dotClass}`} />
+            {chip.label}
+          </span>
         </div>
         <div className="text-[11px] text-navy-300">{row.rating}</div>
       </div>
       <button
         type="button"
         onClick={onChallenge}
-        disabled={busy}
-        title="Challenge"
+        disabled={busy || row.playing}
+        title={row.playing ? "Already in a game" : "Challenge"}
         className="flex h-9 items-center gap-1.5 rounded-md bg-brand-lime px-3 text-[12px] font-bold text-navy-950 shadow-[inset_0_-2px_0_rgba(0,0,0,0.22)] transition hover:bg-brand-lime-light active:translate-y-px active:shadow-[inset_0_-1px_0_rgba(0,0,0,0.18)] disabled:opacity-50"
       >
         {busy ? (
@@ -233,3 +248,24 @@ function PlayerRow({
     </div>
   );
 }
+
+const STATUS_CHIPS = {
+  playing: {
+    label: "Playing",
+    title: "In a game",
+    className: "bg-brand-coral/15 text-brand-coral",
+    dotClass: "bg-brand-coral shadow-[0_0_4px_rgba(214,90,90,0.6)]",
+  },
+  online: {
+    label: "Online",
+    title: "Online",
+    className: "bg-brand-lime/15 text-brand-lime",
+    dotClass: "bg-brand-lime shadow-[0_0_4px_rgba(129,182,76,0.6)]",
+  },
+  offline: {
+    label: "Offline",
+    title: "Offline",
+    className: "bg-white/[0.06] text-navy-300",
+    dotClass: "bg-navy-500",
+  },
+} as const;

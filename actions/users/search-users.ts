@@ -11,6 +11,7 @@ export type FoundUser = {
   image: string | null;
   rating: number;
   online: boolean;
+  playing: boolean;
 };
 
 /**
@@ -40,6 +41,22 @@ export async function searchUsers(prefix: string): Promise<FoundUser[]> {
     },
   });
 
+  const userIds = users.map((u) => u.id);
+  const activeGames = userIds.length
+    ? await prisma.chessGame.findMany({
+        where: {
+          status: "IN_PROGRESS",
+          OR: [{ whiteId: { in: userIds } }, { blackId: { in: userIds } }],
+        },
+        select: { whiteId: true, blackId: true },
+      })
+    : [];
+  const playing = new Set<string>();
+  for (const g of activeGames) {
+    playing.add(g.whiteId);
+    playing.add(g.blackId);
+  }
+
   const online = new Set(onlineUserIds());
   return users.map((u) => ({
     id: u.id,
@@ -47,5 +64,6 @@ export async function searchUsers(prefix: string): Promise<FoundUser[]> {
     image: u.image,
     rating: u.chessRating?.rating ?? DEFAULT_RATING,
     online: online.has(u.id),
+    playing: playing.has(u.id),
   }));
 }

@@ -10,6 +10,8 @@ export type OnlinePlayer = {
   login: string;
   image: string | null;
   rating: number;
+  /** True when the user is currently in an IN_PROGRESS chess game. */
+  playing: boolean;
 };
 
 /**
@@ -25,20 +27,36 @@ export async function getOnlinePlayers(): Promise<OnlinePlayer[]> {
   const ids = onlineUserIds().filter((id) => id !== selfId);
   if (ids.length === 0) return [];
 
-  const users = await prisma.user.findMany({
-    where: { id: { in: ids } },
-    select: {
-      id: true,
-      login: true,
-      image: true,
-      chessRating: { select: { rating: true } },
-    },
-  });
+  const [users, activeGames] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        login: true,
+        image: true,
+        chessRating: { select: { rating: true } },
+      },
+    }),
+    prisma.chessGame.findMany({
+      where: {
+        status: "IN_PROGRESS",
+        OR: [{ whiteId: { in: ids } }, { blackId: { in: ids } }],
+      },
+      select: { whiteId: true, blackId: true },
+    }),
+  ]);
+
+  const playing = new Set<string>();
+  for (const g of activeGames) {
+    playing.add(g.whiteId);
+    playing.add(g.blackId);
+  }
 
   return users.map((u) => ({
     id: u.id,
     login: u.login,
     image: u.image,
     rating: u.chessRating?.rating ?? DEFAULT_RATING,
+    playing: playing.has(u.id),
   }));
 }

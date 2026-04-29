@@ -31,8 +31,11 @@ type GameEndDialogProps = {
   newGameHref?: string;
   /** Label for the "New game" button. Mirrors the time control by default. */
   newGameLabel?: string;
-  /** Callback for the Rematch button. Hidden when omitted. */
+  /** Callback for the Rematch button. Disabled when omitted. */
   onRematch?: () => void;
+  /** When "pending", the button shows a waiting label instead of "Rematch".
+   *  When "declined", reverts to "Rematch" but keeps a hint above. */
+  rematchState?: "idle" | "pending" | "declined";
   /** When set, the "Game Review" CTA navigates to this URL instead of just
    *  closing the dialog. */
   reviewHref?: string;
@@ -80,6 +83,7 @@ export function GameEndDialog({
   newGameHref = "/games/chess",
   newGameLabel = "New game",
   onRematch,
+  rematchState = "idle",
   reviewHref,
 }: GameEndDialogProps) {
   const headline = title ?? HEADLINE[outcome];
@@ -175,12 +179,17 @@ export function GameEndDialog({
             <button
               type="button"
               onClick={onRematch}
-              disabled={!onRematch}
+              disabled={!onRematch || rematchState === "pending"}
               className="flex h-12 items-center justify-center rounded-md bg-navy-800 text-[14px] font-semibold text-white ring-1 ring-white/5 shadow-[inset_0_-2px_0_rgba(0,0,0,0.25)] transition hover:bg-navy-700 active:translate-y-px active:shadow-[inset_0_-1px_0_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Rematch
+              {rematchState === "pending" ? "Waiting…" : "Rematch"}
             </button>
           </div>
+          {rematchState === "declined" && (
+            <p className="text-center text-[12px] text-brand-coral">
+              Opponent declined the rematch.
+            </p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

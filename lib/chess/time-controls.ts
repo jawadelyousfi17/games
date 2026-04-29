@@ -39,7 +39,7 @@ export const TIME_CONTROLS: TimeControl[] = [
   },
 ];
 
-export const DEFAULT_TIME_CONTROL_ID: TimeControlId = "blitz5";
+export const DEFAULT_TIME_CONTROL_ID: TimeControlId = "rapid10";
 
 /** Looks up a time control by id, falling back to the default. */
 export function resolveTimeControl(id: string | null | undefined): TimeControl {

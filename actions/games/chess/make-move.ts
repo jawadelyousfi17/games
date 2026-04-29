@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth/auth-provider";
 import { prisma } from "@/lib/prisma/prisma";
 import { emitGameState } from "@/lib/chess/socket-bus";
 import { toGameStatePayload } from "@/lib/chess/game-state";
+import { resolveCastlingTarget } from "@/lib/chess/castle";
 import { finalizeChessGame } from "./finalize";
 
 type MakeMoveInput = {
@@ -47,9 +48,10 @@ export async function makeChessMove(
       const chess = new Chess(game.fen);
       if (chess.turn() !== myColor) throw new Error("not_your_turn");
 
+      const to = resolveCastlingTarget(chess, input.from, input.to);
       const move = chess.move({
         from: input.from,
-        to: input.to,
+        to,
         promotion: input.promotion ?? "q",
       });
       if (!move) throw new Error("illegal_move");

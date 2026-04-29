@@ -50,7 +50,7 @@ export function useGameReview(history: string[]): GameReview {
       for (const fen of fens) {
         if (cancelled) return;
         if (evals[fen] !== undefined && bestMoves[fen] !== undefined) continue;
-        const result = await analyze(fen, 12);
+        const result = await analyze(fen, { depth: 12 });
         if (!result || cancelled) continue;
         const sideToMove: "w" | "b" =
           fen.split(" ")[1] === "b" ? "b" : "w";

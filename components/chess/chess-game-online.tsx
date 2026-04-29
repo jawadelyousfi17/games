@@ -18,9 +18,15 @@ import { ResultBanner } from "./result-banner";
 import { BoardFrame } from "./board-frame";
 import { GameEndDialog } from "./game-end-dialog";
 import { useGameReview } from "./use-game-review";
-import { playGameEndSound } from "@/lib/chess/sound";
+import {
+  playGameEndSound,
+  playMoveSoundFromSan,
+  playOpeningSound,
+  preloadChessSounds,
+} from "@/lib/chess/sound";
 import { useChessTheme } from "./use-chess-theme";
 import { deriveCaptured } from "@/lib/chess/captured";
+import { resolveCastlingTarget } from "@/lib/chess/castle";
 import { makeChessMove } from "@/actions/games/chess/make-move";
 import { resignChessGame } from "@/actions/games/chess/resign";
 import { claimChessTimeout } from "@/actions/games/chess/claim-timeout";
@@ -28,6 +34,7 @@ import { getChessGame } from "@/actions/games/chess/get-game";
 import { offerDraw } from "@/actions/games/chess/offer-draw";
 import { acceptDraw } from "@/actions/games/chess/accept-draw";
 import { declineDraw } from "@/actions/games/chess/decline-draw";
+import { requestChessRematch } from "@/actions/games/chess/request-rematch";
 import { getChessChatMessages } from "@/actions/games/chess/get-chat-messages";
 import { sendChessChatMessage } from "@/actions/games/chess/send-chat-message";
 import type { GameSnapshot } from "@/actions/games/chess/get-game";
@@ -219,9 +226,34 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
     if (!isFinished || endTriggeredRef.current) return;
     endTriggeredRef.current = true;
     setEndDialogOpen(true);
-    const outcome = computeOutcome(state.result, myColor);
-    playGameEndSound(outcome);
-  }, [isFinished, state.result, myColor]);
+    playGameEndSound(state.endReason);
+  }, [isFinished, state.endReason]);
+
+  // -------- Move sound effects --------
+  // Preload mp3s on mount so the first move plays without a fetch hiccup.
+  // Also fires the opening cue when joining a fresh game (no moves yet).
+  const openingPlayedRef = useRef(false);
+  useEffect(() => {
+    preloadChessSounds();
+    if (!openingPlayedRef.current && state.history.length === 0 && !isFinished) {
+      openingPlayedRef.current = true;
+      playOpeningSound();
+    }
+    // Intentionally empty deps — fires once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Plays the move cue when the history grows. Initialized to the current
+  // length so reconnect-mid-game doesn't replay every prior move's sound.
+  const lastHistoryLenRef = useRef(state.history.length);
+  useEffect(() => {
+    const len = state.history.length;
+    if (len > lastHistoryLenRef.current) {
+      const san = state.history[len - 1];
+      if (san) playMoveSoundFromSan(san, len - 1);
+    }
+    lastHistoryLenRef.current = len;
+  }, [state.history]);
 
   const isLiveView = viewingPly === null;
   const currentPly = viewingPly ?? state.history.length - 1;
@@ -258,8 +290,9 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
 
   // -------- Move execution --------
   const executeMove = useCallback(
-    (from: string, to: string): boolean => {
+    (from: string, rawTo: string): boolean => {
       const trial = new Chess(state.fen);
+      const to = resolveCastlingTarget(trial, from, rawTo);
       const move = trial.move({ from, to, promotion: "q" });
       if (!move) return false;
 
@@ -324,7 +357,8 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
         const moves: string[] = game
           .moves({ square: selected as Square, verbose: true })
           .map((m) => m.to);
-        if (moves.includes(square)) {
+        const resolved = resolveCastlingTarget(game, selected, square);
+        if (moves.includes(square) || moves.includes(resolved)) {
           executeMove(selected, square);
           return;
         }
@@ -352,6 +386,49 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
       /* ignore */
     }
   }, [snapshot.id, isFinished]);
+
+  // -------- Rematch --------
+  const [rematchState, setRematchState] = useState<
+    "idle" | "pending" | "declined"
+  >("idle");
+  const rematchChallengeIdRef = useRef<string | null>(null);
+
+  const onRematch = useCallback(async () => {
+    if (rematchState === "pending") return;
+    setRematchState("pending");
+    const res = await requestChessRematch(snapshot.id);
+    if (!res.ok || !res.challengeId) {
+      setRematchState("idle");
+      return;
+    }
+    rematchChallengeIdRef.current = res.challengeId;
+    // ACCEPTED routes both players via the global IncomingChallengeBanner
+    // socket listener. DECLINED/EXPIRED/CANCELLED is surfaced here below.
+  }, [rematchState, snapshot.id]);
+
+  useEffect(() => {
+    const socket: Socket = io({
+      path: "/socket.io",
+      transports: ["websocket"],
+      autoConnect: true,
+      reconnection: true,
+    });
+    socket.on(
+      "challenge:resolved",
+      (payload: {
+        challengeId: string;
+        status: "ACCEPTED" | "DECLINED" | "EXPIRED" | "CANCELLED";
+      }) => {
+        if (payload.challengeId !== rematchChallengeIdRef.current) return;
+        if (payload.status === "ACCEPTED") return; // banner handles routing
+        setRematchState("declined");
+        rematchChallengeIdRef.current = null;
+      },
+    );
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   const onOfferDraw = useCallback(async () => {
     if (isFinished) return;
@@ -407,9 +484,20 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
         background: theme.lastMove,
         boxShadow: "inset 0 0 0 3px rgba(255,255,255,0.55)",
       };
-      const targets = displayChess
-        .moves({ square: selected as Square, verbose: true })
-        .map((m) => m.to);
+      const verbose = displayChess.moves({
+        square: selected as Square,
+        verbose: true,
+      });
+      const targets = new Set<string>(verbose.map((m) => m.to));
+      // Highlight own-rook squares too so users who castle by dragging the
+      // king onto the rook see it as a legal target.
+      for (const m of verbose) {
+        if (m.flags.includes("k")) {
+          targets.add(m.to[0] === "g" ? `h${m.to[1]}` : m.to);
+        } else if (m.flags.includes("q")) {
+          targets.add(m.to[0] === "c" ? `a${m.to[1]}` : m.to);
+        }
+      }
       for (const t of targets) {
         out[t] = {
           ...(out[t] ?? {}),
@@ -558,6 +646,8 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
         playerColor={myColor}
         newGameLabel="New game"
         reviewHref={`/games/chess/review/${snapshot.id}`}
+        onRematch={myColor !== null ? onRematch : undefined}
+        rematchState={rematchState}
       />
 
       {/* Right rail — fixed to the absolute right edge of the viewport. */}

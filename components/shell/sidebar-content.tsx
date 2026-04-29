@@ -26,8 +26,8 @@ const ICON_CLASS = "h-5 w-5 shrink-0";
 const NAV_ITEMS: NavItem[] = [
   { label: "Play", href: "/games/chess", icon: <Swords className={ICON_CLASS} strokeWidth={2} /> },
   { label: "Leaderboard", href: "/games/chess/leaderboard", icon: <Trophy className={ICON_CLASS} strokeWidth={2} /> },
-  { label: "Puzzles", href: "#", icon: <Puzzle className={ICON_CLASS} strokeWidth={2} />, disabled: true },
-  { label: "Learn", href: "#", icon: <GraduationCap className={ICON_CLASS} strokeWidth={2} />, disabled: true },
+  { label: "Puzzles", href: "/puzzles", icon: <Puzzle className={ICON_CLASS} strokeWidth={2} /> },
+  { label: "Learn", href: "/learn", icon: <GraduationCap className={ICON_CLASS} strokeWidth={2} /> },
   { label: "Watch", href: "#", icon: <Tv className={ICON_CLASS} strokeWidth={2} />, disabled: true },
   { label: "Community", href: "#", icon: <Users className={ICON_CLASS} strokeWidth={2} />, disabled: true },
 ];
