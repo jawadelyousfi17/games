@@ -349,9 +349,9 @@ export function ChessGameBot({
       });
       const targets = new Set<string>(verbose.map((m) => m.to));
       for (const m of verbose) {
-        if (m.flags.includes("k")) {
+        if (m.isKingsideCastle()) {
           targets.add(m.to[0] === "g" ? `h${m.to[1]}` : m.to);
-        } else if (m.flags.includes("q")) {
+        } else if (m.isQueensideCastle()) {
           targets.add(m.to[0] === "c" ? `a${m.to[1]}` : m.to);
         }
       }

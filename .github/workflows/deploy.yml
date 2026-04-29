@@ -14,6 +14,40 @@ jobs:
     name: SSH deploy
     runs-on: ubuntu-latest
     steps:
+      - name: Show trigger metadata
+        run: |
+          echo "::group::Trigger info"
+          echo "event       = ${{ github.event_name }}"
+          echo "actor       = ${{ github.actor }}"
+          echo "ref         = ${{ github.ref }}"
+          echo "sha         = ${{ github.sha }}"
+          echo "run id      = ${{ github.run_id }}"
+          echo "run number  = ${{ github.run_number }}"
+          echo "::endgroup::"
+
+      - name: Validate required secrets
+        run: |
+          echo "::group::Secret presence check (values masked)"
+          missing=0
+          check() {
+            if [ -z "$2" ]; then
+              echo "✗ $1 is NOT set"
+              missing=1
+            else
+              echo "✓ $1 is set (len=${#2})"
+            fi
+          }
+          check VPS_HOST       "${{ secrets.VPS_HOST }}"
+          check VPS_USER       "${{ secrets.VPS_USER }}"
+          check VPS_SSH_KEY    "${{ secrets.VPS_SSH_KEY }}"
+          check DEPLOY_PATH    "${{ secrets.DEPLOY_PATH }}"
+          check PM2_APP_NAME   "${{ secrets.PM2_APP_NAME }}"
+          if [ "$missing" = "1" ]; then
+            echo "::error::One or more required secrets are missing — see list above"
+            exit 1
+          fi
+          echo "::endgroup::"
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -21,23 +55,87 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          # `set -e` aborts on any failed step so a half-pulled deploy
-          # doesn't end up running. Each line below is independent so the
-          # action's log shows exactly which step failed.
+          # Bump the action's verbosity + don't cut output on long commands.
+          debug: true
+          command_timeout: 30m
+          script_stop: true
+          envs: GIT_SHA,GIT_REF,RUN_ID
           script: |
             set -euo pipefail
-            cd ${{ secrets.DEPLOY_PATH }}
-            echo "▶ git pull"
+
+            log() { echo -e "\n\033[1;36m▶ $*\033[0m"; }
+            ok()  { echo -e "\033[1;32m✔ $*\033[0m"; }
+            fail_handler() {
+              local code=$?
+              echo -e "\n\033[1;31m✗ deploy failed (exit $code) at line ${BASH_LINENO[0]}\033[0m"
+              exit $code
+            }
+            trap fail_handler ERR
+
+            log "host environment"
+            uname -a
+            whoami
+            pwd
+            echo "node:    $(command -v node) → $(node -v 2>/dev/null || echo 'missing')"
+            echo "npm:     $(command -v npm) → $(npm -v 2>/dev/null || echo 'missing')"
+            echo "pm2:     $(command -v pm2) → $(pm2 -v 2>/dev/null || echo 'missing')"
+            echo "git:     $(command -v git) → $(git --version 2>/dev/null || echo 'missing')"
+            echo "free disk:" ; df -h . | tail -n +1
+            echo "free mem:"  ; free -h || true
+
+            log "cd into deploy path"
+            cd "${{ secrets.DEPLOY_PATH }}"
+            pwd
+
+            log "git fetch + hard reset"
+            BEFORE=$(git rev-parse HEAD || echo none)
             git fetch --all --prune
             git reset --hard origin/main
-            echo "▶ install deps"
-            npm ci
-            echo "▶ prisma generate + migrate"
+            AFTER=$(git rev-parse HEAD)
+            echo "before: $BEFORE"
+            echo "after:  $AFTER"
+            echo "diff:"
+            git --no-pager log --oneline "$BEFORE..$AFTER" 2>/dev/null | head -50 || true
+
+            log "npm ci"
+            npm ci --no-audit --no-fund
+
+            log "prisma generate"
             npx prisma generate
+
+            log "prisma migrate status"
+            npx prisma migrate status || true
+
+            log "prisma migrate deploy"
             npx prisma migrate deploy
-            echo "▶ build"
+
+            log "next build"
             npm run build
-            echo "▶ pm2 restart"
-            pm2 restart ${{ secrets.PM2_APP_NAME }} --update-env
+
+            log "pm2 status (before)"
+            pm2 list || true
+
+            log "pm2 restart"
+            pm2 restart "${{ secrets.PM2_APP_NAME }}" --update-env
             pm2 save
-            echo "✔ deploy complete"
+
+            log "pm2 status (after)"
+            pm2 list
+
+            log "tail recent pm2 logs"
+            pm2 logs "${{ secrets.PM2_APP_NAME }}" --lines 30 --nostream || true
+
+            ok "deploy complete · sha=$AFTER"
+        env:
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
+          RUN_ID: ${{ github.run_id }}
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "::group::Deploy summary"
+          echo "result = ${{ job.status }}"
+          echo "sha    = ${{ github.sha }}"
+          echo "ref    = ${{ github.ref }}"
+          echo "::endgroup::"

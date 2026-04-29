@@ -492,9 +492,9 @@ export function ChessGameOnline({ snapshot }: ChessGameOnlineProps) {
       // Highlight own-rook squares too so users who castle by dragging the
       // king onto the rook see it as a legal target.
       for (const m of verbose) {
-        if (m.flags.includes("k")) {
+        if (m.isKingsideCastle()) {
           targets.add(m.to[0] === "g" ? `h${m.to[1]}` : m.to);
-        } else if (m.flags.includes("q")) {
+        } else if (m.isQueensideCastle()) {
           targets.add(m.to[0] === "c" ? `a${m.to[1]}` : m.to);
         }
       }
